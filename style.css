@@ -167,6 +167,9 @@ body {
 
 .empty { color: var(--text-faint); font-size: 0.95rem; }
 
+.closed-card { border-left-color: var(--border); opacity: 0.72; }
+.closed-mins { color: var(--text-faint); font-size: clamp(2.4rem, 10vw, 3rem); }
+
 /* Footer */
 .foot {
   display: flex;

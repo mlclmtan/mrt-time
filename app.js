@@ -55,6 +55,19 @@ function render() {
       continue;
     }
 
+    // Out of service hours: countdowns would be misleading, so show a muted state.
+    if (!state.inService) {
+      card.classList.add('closed-card');
+      card.innerHTML = `
+        <div class="card-top">
+          <span class="direction">${dir.label}</span>
+          <span class="dest"><span class="code">${p.destCode}</span>${p.destName}</span>
+        </div>
+        <div class="next"><span class="mins closed-mins">—</span><span class="unit">Not running</span></div>`;
+      board.appendChild(card);
+      continue;
+    }
+
     const nextMin = liveMins(p.minsToNext);
     const nextNextMin = liveMins(p.minsToNextNext);
     const n = label(nextMin);
