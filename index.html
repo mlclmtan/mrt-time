@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0d0f12" />
+  <meta name="description" content="Predicted next-train arrival times for the Singapore MRT Thomson–East Coast Line, from timed platform photos." />
+  <title>MRT Time · TEL</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%239D5B25'/><text x='50' y='68' font-size='52' font-family='Arial' font-weight='bold' text-anchor='middle' fill='white'>T</text></svg>" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app" aria-live="polite">
+    <header class="head">
+      <div class="line-badge" id="line-badge">TEL</div>
+      <div class="head-text">
+        <h1 id="station-name">Orchard</h1>
+        <p id="line-name" class="line-name">Thomson–East Coast Line</p>
+      </div>
+      <div class="live" id="live" title="Live — updates automatically">
+        <span class="dot"></span><span class="live-label">LIVE</span>
+      </div>
+    </header>
+
+    <section id="board" class="board" aria-busy="true">
+      <!-- direction cards injected here -->
+    </section>
+
+    <p id="closed" class="closed" hidden>Service has ended for the night. Times shown are the first trains once service resumes.</p>
+
+    <footer class="foot">
+      <span id="updated" class="updated">Loading…</span>
+      <button id="how" class="link" type="button" aria-expanded="false" aria-controls="how-panel">How this works</button>
+    </footer>
+
+    <div id="how-panel" class="how-panel" hidden>
+      <p>These times are <strong>predicted</strong>, not live from the operator. They are computed from timed photos of the platform arrival board: each photo's capture time plus the minutes shown gives a real arrival, and the schedule is projected from the closest matching time of day.</p>
+      <p id="how-stats" class="how-stats"></p>
+      <p class="muted">The more photos captured across the day, the sharper the prediction.</p>
+    </div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
