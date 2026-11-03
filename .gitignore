@@ -20,3 +20,4 @@ claude-run.err
 .next/
 next-env.d.ts
 coverage/
+.work/

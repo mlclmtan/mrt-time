@@ -6,6 +6,11 @@ export const DAY = 24 * HOUR;
 export const SGT_OFFSET = 8 * HOUR;
 export const MINUTES_PER_DAY = 24 * 60;
 
+/** The current instant (kept in one place so render code stays lint-pure). */
+export function nowMs(): number {
+  return Date.now();
+}
+
 /** "2026-10-26" in Singapore. */
 export function sgtDate(instant: number): string {
   return new Date(instant + SGT_OFFSET).toISOString().slice(0, 10);

@@ -69,6 +69,17 @@ export async function logTripEvent(userId: string, input: TripEventInput, source
   return { id: row?.id ?? null };
 }
 
+/** Today's (SGT) taps for one owner, oldest first. */
+export async function todaysEvents(userId: string, now = Date.now()) {
+  const rows = await getDb()
+    .select({ kind: tripEvent.kind, station: tripEvent.station, at: tripEvent.at, journeyKey: tripEvent.journeyKey })
+    .from(tripEvent)
+    .where(and(eq(tripEvent.userId, userId), eq(tripEvent.tripDate, sgtDate(now))))
+    .orderBy(tripEvent.at)
+    .limit(200);
+  return rows.map((r) => ({ ...r, at: new Date(r.at).getTime() }));
+}
+
 /** Undo: only the owner's own event, only within 10 s of logging it. */
 export async function undoTripEvent(userId: string, clientId: string, now = Date.now()) {
   const deleted = await getDb()

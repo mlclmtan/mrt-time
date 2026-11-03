@@ -23,7 +23,12 @@ function createAuth() {
     },
     // Privacy: never store IP addresses on sessions.
     advanced: { ipAddress: { disableIpTracking: true } },
-    session: { expiresIn: 60 * 60 * 24 * 90, updateAge: 60 * 60 * 24 },
+    session: {
+      expiresIn: 60 * 60 * 24 * 90,
+      updateAge: 60 * 60 * 24,
+      // Signed cookie cache avoids a DB read on every page render.
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
+    },
     user: {
       validateUserInfo: (info) =>
         permitted(info.user.email || "")
