@@ -147,7 +147,9 @@ export const STATIONS: Station[] = [
     weatherArea: "City",
     exits: [n("Towards Singapore General Hospital", "往新加坡中央醫院"), n("Towards Pearl's Hill", "往珍珠山")],
     nearby: [n("Singapore General Hospital", "新加坡中央醫院"), n("Chinatown", "牛車水"), n("Everton Park", "愛維頓園")],
-    transferMin: { "EW16>TE17": 4, "TE17>EW16": 4, "EW16>NE3": 3, "NE3>EW16": 3, "TE17>NE3": 4, "NE3>TE17": 4 },
+    // Estimates (platform to platform, walking at a normal pace). EW↔TE is
+    // observed at 1–2 min (median 2); NE↔EW and NE↔TE are longer walks.
+    transferMin: { "EW16>TE17": 2, "TE17>EW16": 2, "EW16>NE3": 3, "NE3>EW16": 3, "TE17>NE3": 4, "NE3>TE17": 4 },
     seo: true,
   },
   {
@@ -287,8 +289,12 @@ export const RIDE_MINUTES: Record<string, number> = {
   "EW17>EW15": 5,
 };
 
-/** Default interchange walk when a station has no specific figure. */
-export const DEFAULT_TRANSFER_MIN = 4;
+/**
+ * Default interchange walk (estimate) when a station has no specific
+ * figure. Kept ≤ 4 min: only add a larger per-station value when a
+ * transfer is known to be long.
+ */
+export const DEFAULT_TRANSFER_MIN = 3;
 
 const LINE_PREFIX: Record<string, LineCode> = { EW: "EWL", TE: "TEL", NE: "NEL" };
 

@@ -4,6 +4,7 @@ import { localePath } from "@/lib/i18n";
 import type { Role } from "@/lib/auth/access";
 import { LanguageSwitch } from "./language-switch";
 import { UpdateBanner, VersionTag } from "./update-banner";
+import { NavTabs } from "./nav-tabs";
 
 export async function SiteHeader({ role }: { role: Role | null }) {
   const { locale, t } = await getT();
@@ -17,6 +18,7 @@ export async function SiteHeader({ role }: { role: Role | null }) {
   if (role === "owner") links.push(["/me", t("nav.me")]);
   if (role) links.push(["/admin", t("nav.admin")]);
   links.push(["/settings", t("nav.settings")]);
+  const tabs = links.map(([path, label]) => ({ href: href(path), label }));
   return (
     <header className="sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 backdrop-blur">
       <UpdateBanner />
@@ -25,22 +27,12 @@ export async function SiteHeader({ role }: { role: Role | null }) {
           <span className="led rounded-md border border-line bg-panel px-1.5 py-0.5 text-sm">3 min</span>
           <span>{t("app.name")}</span>
         </Link>
-        <nav aria-label="Main" className="ml-auto hidden items-center gap-4 text-sm text-muted sm:flex">
-          {links.map(([path, label]) => (
-            <Link key={path} href={href(path)} className="hover:text-ink">
-              {label}
-            </Link>
-          ))}
-        </nav>
-        <LanguageSwitch />
+        <NavTabs tabs={tabs} label="Main" layout="inline" className="ml-auto hidden sm:flex" />
+        <span className="ml-auto sm:ml-0">
+          <LanguageSwitch />
+        </span>
       </div>
-      <nav aria-label="Main mobile" className="-mx-1 flex gap-3 overflow-x-auto pb-2 text-sm text-muted sm:hidden">
-        {links.map(([path, label]) => (
-          <Link key={path} href={href(path)} className="shrink-0 rounded-full border border-line px-3 py-1">
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <NavTabs tabs={tabs} label="Main mobile" layout="scroll" className="sm:hidden" />
     </header>
   );
 }

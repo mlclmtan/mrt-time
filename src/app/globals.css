@@ -41,6 +41,8 @@ html {
 body {
   min-height: 100dvh;
   margin: 0;
+  /* Room for the consent sheet while it is shown (set by ConsentBanner). */
+  padding-bottom: var(--consent-h, 0px);
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -69,6 +71,18 @@ button:disabled {
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+/* Bottom offset for floating buttons: above the consent sheet or the safe area. */
+.float-bottom {
+  bottom: calc(max(var(--consent-h, 0px), env(safe-area-inset-bottom)) + 12px);
+}
+/* Horizontally scrollable rows (tabs) without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 .tabular {
   font-variant-numeric: tabular-nums;

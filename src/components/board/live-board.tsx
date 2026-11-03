@@ -181,7 +181,9 @@ function DirectionRow({ platform, direction, now }: { platform: BoardPlatform; d
       ) : (
         <div className="mt-2">
           <div className="led text-3xl font-bold">{t("board.every", { n: p.headwayMin })}</div>
-          <div className="text-sm text-muted">{t("board.wait", { n: p.waitMin.max })}</div>
+          <div className="tabular text-sm text-muted">
+            {t("board.wait", { n: p.waitMin.max })} · {t("board.window", { from: clock(now), to: clock(now + p.waitMin.max * 60_000) })}
+          </div>
         </div>
       )}
       {p.kind !== "closed" && (

@@ -1,4 +1,4 @@
-# MRT Time — v1.0 spec (revamp)
+# MRT Time — v1.1 spec
 
 Public web app (PWA) that predicts Singapore MRT train arrivals from timed platform-board readings (no operator live-arrival feed exists), plans door-to-door commutes with transfers, and doubles as a **real marketing/analytics practice product** (GA4, GTM, ads tracking, KOL tracking, SEO, experiments).
 
@@ -18,6 +18,7 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - Lines/stations needed now: EWL (EW15 Tanjong Pagar, EW16 Outram Park, EW17 Tiong Bahru, EW18 Redhill + terminals EW1 Pasir Ris, EW29 Joo Koon, EW33 Tuas Link), TEL (TE14 Orchard, TE17 Outram Park, TE18 Maxwell, TE19 Shenton Way + terminals TE1 Woodlands North, TE29 Bayshore), NEL (NE3 Outram Park + NE1 HarbourFront, NE18 Punggol Coast). Station order/adjacency per line so ride times and "which direction" are computable. Easy to extend to every station later (data file structure must allow full network).
 - Line colours (official), service hours (approx 05:30–00:30), directions per line keyed by terminal (e.g. EWL `TO_EAST`→Pasir Ris, `TO_WEST`→Joo Koon/Tuas Link; TEL `TO_BAYSHORE`, `TO_NORTH`; NEL `TO_HARBOURFRONT`, `TO_PUNGGOL`).
 - Inter-station ride minutes (observed: EW17↔EW16 3, TE17↔TE19 3, EW15→EW17 5) with a default of 2 min/stop.
+- Interchange transfer minutes (estimates, platform to platform): Outram Park EW16↔TE17 **2** (observed 1–2, median 2), NE3↔EW16 **3**, NE3↔TE17 **4**. Default for an interchange without a figure: 3. Never above 4 unless a transfer is known to be long.
 
 ## 4. Observations & prediction engine (`src/lib/predict/`, pure, tested)
 - **Observation** = board reading: station, line, direction, destination, capturedAt (SGT), minutes shown for next / next-next / optional 3rd train, source (owner | public | hermes), status (approved | pending | rejected).
@@ -35,9 +36,15 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - Planner computes for a departure time (or "now"): per ride leg the catchable train (arrival at platform + prediction), the transfer catch ("tight"/"likely"/"wait ~N min"), final arrival time, plus best/worst case. "Leave by" mode for a target arrival time. "List" mode: next 6 departures with arrival times (e.g. "leave desk at 12:30" → list).
 - Public: pick any two supported stations (+ optional walk minutes) → route via the network with at most 2 transfers.
 - Owner (private, from DB seed): saved places Home/Office and journeys Home→Office (walk → EW17 TO_EAST → EW16 transfer → TE17 TO_BAYSHORE → TE19 → walk), Office→Home (reverse), and alternative Office→Home via Tanjong Pagar (walk → EW15 TO_WEST → EW17 → walk). Show best-door tips per leg (data from seed).
+- Planner UI: time defaults to now (SGT, server-rendered so SSR and client agree), plans automatically on load and re-plans (debounced) on any input change; only visitor-initiated queries emit `planner_query`. For the owner, From/To (and walk minutes) default to the current journey's stations.
 - Rain-aware hint: data.gov.sg 2-hour weather forecast (free, no key) for the relevant area → suggest the more sheltered journey variant when rain is forecast.
 
-## 6. Logging (owner)
+## 6. Owner Home & logging
+- **Train times first.** Above the logging buttons:
+  - Journey auto-selected by SGT time of day (before 14:00 → Home→Office, from 14:00 → Office→Home); a manual pick is remembered for 2 h (cookie `mrt_journey`).
+  - **Leave now →** card: arrive ~HH:MM with best–worst, per ride leg the board clock (or range), confidence + reason ("from a board reading 12 min ago" / "typical gap at this hour · every ~6 min"), and the best-door tip from journey data.
+  - **Next departures** (list mode, 6 rows): leave at → board leg 1 (line chip + clock) → transfer catch (tight / likely / wait ~N) → board leg 2 → arrive, with a live countdown to the first leave-by. In unstable / headway-only windows rows show ranges, never exact clocks.
+  - Recomputed (`GET /api/commute`, owner only) on journey change, immediately after each logging tap (the rest of the trip starts from the platform, the end of the current ride, or where you got off; taps older than 90 min are ignored), right after a board reading is saved (same-day anchor), every minute, and when the first leave-by passes.
 - Home screen big buttons in context: "At platform", "Boarded", "Got off", "Tap out", "Arrived" — journey-aware (knows the next expected step), timestamp at tap, undo within 10 s.
 - Board reading entry: station + direction preselected from journey context, number pad for minutes (up to 3 trains), save. Optional photo is NOT stored (photos live in Notion).
 - `POST /api/ingest` with bearer `INGEST_TOKEN` so Hermes can post readings/events it extracts from photos sent in chat.
@@ -80,8 +87,12 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - Share button (Web Share API) with UTM.
 
 ## 10. PWA & UX
-- Installable, standalone, safe areas, 100dvh, offline last-snapshot render. Dark MRT-board look with official line colours, big countdowns, springy but calm motion. Asia/Singapore time everywhere. "min" units.
-- Version on Home and Settings: `v<pkg> · <sha> · <SGT build time>`; update banner via `/api/version` (no-store) on open, visibilitychange, every 5 min.
+- Installable, standalone, safe areas, 100dvh, offline last-snapshot render.
+- Consent banner is a compact bottom sheet; while shown it publishes its height (incl. `env(safe-area-inset-bottom)`) as `--consent-h` and the page pads its bottom by that much, so no button or card is hidden under it. Floating buttons sit above it.
+- Navigation tabs (site + admin) show the current page (`aria-current="page"` + filled pill); the mobile tab row scrolls sideways with no visible scrollbar and keeps edge padding.
+- Admin: KPI labels have a fixed two-line height; empty charts show "No data for this range" over faint axes; the selected range is spelled out next to the date inputs ("7 Oct – 3 Nov 2026" / "2026年10月7日至11月3日").
+- `pnpm smoke <baseUrl>`: browser-free post-deploy check of pages and APIs. Dark MRT-board look with official line colours, big countdowns, springy but calm motion. Asia/Singapore time everywhere. "min" units.
+- Version on Home (small footer near the top: under the hero for visitors, under the logging buttons for the owner) and at the top of Settings: `v<pkg> · <sha> · <SGT build time>`; update banner via `/api/version` (no-store) on open, visibilitychange, every 5 min.
 - Web Push (home-screen PWA): "leave now" from planner (QStash schedule, `QSTASH_TOKEN`), disruption alerts for saved journeys. No-op without env.
 - Link to `bus.91208274.xyz` when a line on the journey has an alert.
 

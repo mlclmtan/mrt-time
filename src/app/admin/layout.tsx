@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/server";
 import { getT } from "@/lib/i18n/server";
 import type { DictKey } from "@/lib/i18n";
+import { NavTabs } from "@/components/nav-tabs";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -29,13 +29,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <h1 className="text-2xl font-bold">{t("admin.title")}</h1>
         {!owner && <span className="chip bg-accent/15 text-accent">{t("admin.readOnly")}</span>}
       </div>
-      <nav className="flex flex-wrap gap-2 text-sm">
-        {NAV.filter(([, , ownerOnly]) => owner || !ownerOnly).map(([href, key]) => (
-          <Link key={href} href={href} className="rounded-full border border-line px-3 py-1">
-            {t(key)}
-          </Link>
-        ))}
-      </nav>
+      <NavTabs
+        label={t("admin.title")}
+        layout="wrap"
+        tabs={NAV.filter(([, , ownerOnly]) => owner || !ownerOnly).map(([href, key]) => ({ href, label: t(key), exact: href === "/admin" }))}
+      />
       {children}
     </div>
   );

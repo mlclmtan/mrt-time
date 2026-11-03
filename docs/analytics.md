@@ -65,7 +65,7 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `page_view` | `page_type` (`landing, owner_home, station, planner, accuracy, media_kit, about, privacy, terms, submit, settings, admin, kol, sign_in, other`), `station?` (slug) | Every client route change (`analytics-provider.tsx`); server-side aggregate row when no consent (`proxy.ts`, `page_type=other`) |
 | `station_view` | `station` (slug), `line?` | Station page mount (`StationTracker`, `/station/[slug]`) |
 | `journey_view` | `journey_type` (`owner_saved\|public`), `journey_key?` (slug) | Planner result for an owner saved journey (`planner.tsx`). `public` is in the schema but not emitted yet. |
-| `planner_query` | `from_station`, `to_station` (slug), `mode` (`depart\|leave_by\|list`), `transfers` (0–2), `journey_type` | Successful `/api/plan` response (`planner.tsx`) |
+| `planner_query` | `from_station`, `to_station` (slug), `mode` (`depart\|leave_by\|list`), `transfers` (0–2), `journey_type` | Successful `/api/plan` response the visitor asked for (`planner.tsx`): submit or an input change (debounced). The automatic plan on page load is **not** counted. |
 | `prediction_view` | `station` (code), `line`, `direction`, `confidence` (`high\|medium\|low`), `basis` (`same_day\|historical\|band\|closed\|none`) | Each direction row on a live board, once per mount (`live-board.tsx`) |
 | `prediction_feedback` | `station` (code), `line`, `direction`, `verdict` (`accurate\|early\|late`) | Tap on accurate/early/late under a prediction (`live-board.tsx`) |
 | `log_reading` | `station` (code), `line`, `direction`, `trains` (1–3) | Reading saved successfully (`reading-form.tsx`) |

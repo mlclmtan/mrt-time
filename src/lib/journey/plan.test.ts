@@ -85,7 +85,7 @@ describe("journey planner", () => {
         band: "weekday_offpeak",
         unstable: false,
       }),
-    ).toEqual({ kind: "headway", headwayMin: 5, confidence: "low" });
+    ).toEqual({ kind: "headway", headwayMin: 5, confidence: "low", reason: { code: "typical_gap", params: {} } });
   });
 });
 
@@ -98,7 +98,13 @@ describe("network", () => {
     expect(rideMinutes("EW17", "EW16")).toBe(3);
     expect(rideMinutes("EW15", "EW17")).toBe(5);
     expect(rideMinutes("TE14", "TE17")).toBe(6); // 3 stops × 2 min default
-    expect(transferMinutes("EW16", "TE17")).toBe(4);
+    // Outram Park estimates: EW↔TE observed 1–2 min (median 2).
+    expect(transferMinutes("EW16", "TE17")).toBe(2);
+    expect(transferMinutes("TE17", "EW16")).toBe(2);
+    expect(transferMinutes("NE3", "EW16")).toBe(3);
+    expect(transferMinutes("EW16", "NE3")).toBe(3);
+    expect(transferMinutes("NE3", "TE17")).toBe(4);
+    expect(transferMinutes("TE17", "NE3")).toBe(4);
   });
 
   it("service hours run past midnight", () => {
@@ -114,6 +120,10 @@ describe("network", () => {
     const one = findRoutes("tiong-bahru", "shenton-way");
     expect(one[0].transfers).toBe(1);
     expect(one[0].steps.map((s) => s.kind)).toEqual(["ride", "transfer", "ride"]);
+    // Public routing uses the Outram EW16 → TE17 estimate (2 min, not 4).
+    expect(one[0].steps[1]).toMatchObject({ kind: "transfer", at: "outram-park", from: "EW16", to: "TE17", min: 2 });
+    for (const r of findRoutes("redhill", "punggol-coast"))
+      for (const s of r.steps) if (s.kind === "transfer") expect(s.min).toBeLessThanOrEqual(4);
     const legs = routeToLegs(one[0], 9, 5);
     expect(legs[0]).toEqual({ kind: "walk", min: 9 });
     expect(legs.at(-1)).toEqual({ kind: "walk", min: 5 });

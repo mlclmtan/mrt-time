@@ -3,8 +3,8 @@ import type { RideLeg, TrainSchedule, TrainSource } from "./plan";
 
 export function scheduleFromPrediction(p: Prediction): TrainSchedule {
   if (p.kind === "times" && p.arrivals.length)
-    return { kind: "times", times: p.arrivals.map((a) => a.at), headwayMin: p.headwayMin, confidence: p.confidence };
-  return { kind: "headway", headwayMin: p.headwayMin || 6, confidence: p.kind === "closed" ? "low" : p.confidence };
+    return { kind: "times", times: p.arrivals.map((a) => a.at), headwayMin: p.headwayMin, confidence: p.confidence, reason: p.reason, ...(p.anchorAt != null ? { anchorAt: p.anchorAt } : {}) };
+  return { kind: "headway", headwayMin: p.headwayMin || 6, confidence: p.kind === "closed" ? "low" : p.confidence, reason: p.reason };
 }
 
 /** A TrainSource that runs the prediction engine at the moment it is asked about. */

@@ -39,7 +39,7 @@ export function FeedbackWidget() {
           setOpen(true);
           setState("idle");
         }}
-        className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-2 text-xs shadow-lg"
+        className="float-bottom fixed right-3 z-40 flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-2 text-xs shadow-lg"
       >
         <MessageSquare size={14} aria-hidden /> {t("feedback.cta")}
       </button>

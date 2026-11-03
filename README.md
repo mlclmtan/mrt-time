@@ -13,6 +13,7 @@ Live at <https://mrt.91208274.xyz> · v1.0.0 · spec: [SPEC.md](SPEC.md)
 | Boards | `/station/[slug]` live board per platform direction: countdowns + clock times, or "every ~N min" ranges, with confidence (high/medium/low) and a plain reason. Crowd chips and service alerts from LTA DataMall; link to the bus app on disruption. Offline: last snapshot. |
 | Prediction | `src/lib/predict/`: same-day anchor (≤ 90 min, high confidence) → time-band headway (LTA 2–3 / 5–7 min, overridden by the observed median after ≥ 2 readings) → historical clock-time repeat (v0 port) only outside unstable windows (weekday 09:15–10:30 by default, editable in admin). |
 | Planner | `/plan` and the owner home: walk / ride / transfer legs, catchable train per ride, transfer catch (tight / likely / wait ~N), best/worst case, **leave at**, **arrive by** and **next 6** modes, ≤ 2 transfers between any supported stations, rain hint (data.gov.sg) pointing to the sheltered variant. |
+| Owner home | Journey auto-picked by time (before 14:00 SGT Home→Office, after Office→Home; a manual pick holds 2 h). **Leave now →** card (arrive ~HH:MM, best–worst, per-leg confidence + reason, best-door tip) and **Next departures** (6 rows: leave → board leg 1 → transfer catch → board leg 2 → arrive, ranges in unstable windows) with a live "leave in m:ss" countdown. Recomputes from the remaining legs right after each tap and after a board reading. |
 | Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware one-tap logging (At platform → Boarded → Got off → Tap out → Arrived) with 10 s undo, board-reading number pad, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
 | Crowd-sourcing | `/submit` public readings: rate limit 10/hour per device + daily IP hash; auto-approved when within ±2 min of an approved reading (or same-day prediction) in the same 30-min window, else moderated in `/admin/submissions`. Hermes posts readings/events to `/api/ingest`. |
 | Accuracy | Every owner "board" stores what was predicted for that moment; `/accuracy` shows hit rate (±1 min) by line, station and time band. |
@@ -40,6 +41,7 @@ Useful scripts:
 | `pnpm test` | Unit + SQL tests (PGlite runs the generated migrations). |
 | `pnpm lint` · `pnpm typecheck` | ESLint · `tsc --noEmit`. |
 | `pnpm build` | Production build (needs no env). `pnpm verify:clean` builds a copy with **no** `.env*` files to prove it. |
+| `pnpm smoke <baseUrl>` | Post-deploy check without a browser: main pages + APIs return 200, board / plan JSON shapes, `tiong-bahru → shenton-way` list mode gives 6 options with the Outram transfer ≤ 2 min, owner API refuses anonymous calls. |
 | `pnpm db:generate` | Generate a Drizzle migration from `src/lib/db/schema.ts` into `drizzle/`. |
 | `pnpm db:migrate` | Apply migrations (needs `DATABASE_URL`). |
 | `pnpm db:seed` | Upsert owner data from `private/seed.json` (`--dry-run` validates only). |

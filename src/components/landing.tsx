@@ -4,6 +4,7 @@ import { LINES, PLATFORMS, STATIONS } from "@/lib/network/data";
 import { ExposureTracker } from "./trackers";
 import { NewsletterForm } from "./voc/newsletter-form";
 import { ShareButton } from "./share-button";
+import { VersionFooter } from "./version-footer";
 
 export function StationGrid({ locale, t }: { locale: Locale; t: T }) {
   return (
@@ -48,6 +49,7 @@ export function Landing({ locale, t, variant }: { locale: Locale; t: T; variant:
           </Link>
           <ShareButton path={localePath(locale, "/")} title="MRT Time" contentType="app" />
         </div>
+        <VersionFooter />
       </section>
       <StationGrid locale={locale} t={t} />
       <section className="panel space-y-2 p-5">

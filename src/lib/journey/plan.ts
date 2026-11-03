@@ -5,7 +5,7 @@
  */
 import { rideMinutes, type Route } from "../network";
 import { MINUTE } from "../time";
-import type { Confidence } from "../predict/types";
+import type { Confidence, ReasonCode } from "../predict/types";
 
 export type WalkLeg = { kind: "walk"; min: number; label?: string; tip?: string };
 export type RideLeg = {
@@ -20,9 +20,11 @@ export type RideLeg = {
 export type TransferLeg = { kind: "transfer"; min: number; at?: string; tip?: string };
 export type Leg = WalkLeg | RideLeg | TransferLeg;
 
+/** Why the engine believes a schedule ("from a reading 12 min ago"). */
+export type ScheduleReason = { code: ReasonCode; params: Record<string, string | number> };
 export type TrainSchedule =
-  | { kind: "times"; times: number[]; headwayMin: number; confidence: Confidence }
-  | { kind: "headway"; headwayMin: number; confidence: Confidence };
+  | { kind: "times"; times: number[]; headwayMin: number; confidence: Confidence; reason?: ScheduleReason; anchorAt?: number }
+  | { kind: "headway"; headwayMin: number; confidence: Confidence; reason?: ScheduleReason };
 /** Trains for a ride leg around the time we reach (or must leave) its platform. */
 export type TrainSource = (leg: RideLeg, around: number) => TrainSchedule;
 
@@ -37,6 +39,10 @@ export type PlannedLeg = {
   catch?: CatchLabel;
   estimate?: boolean;
   confidence?: Confidence;
+  headwayMin?: number;
+  reason?: ScheduleReason;
+  /** When the board reading behind these times was taken. */
+  anchorAt?: number;
 };
 export type Plan = {
   departAt: number;
@@ -134,6 +140,9 @@ export function planForward(legs: Leg[], departAt: number, source: TrainSource):
       catch: s.kind === "times" ? catchLabel(slackMin) : "wait",
       estimate: s.kind !== "times",
       confidence: s.confidence,
+      headwayMin: s.headwayMin,
+      ...(s.reason ? { reason: s.reason } : {}),
+      ...(s.kind === "times" && s.anchorAt != null ? { anchorAt: s.anchorAt } : {}),
     });
     t = boardAt + ride;
   }

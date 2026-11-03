@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloudRain, Footprints, Repeat, TrainFront } from "lucide-react";
 import type { Plan, PlannedLeg } from "@/lib/journey/plan";
 import type { PlanResponse } from "@/lib/server/journeys";
 import { BUS_APP_URL } from "@/lib/push/disruptions";
 import { LINES, PLATFORMS } from "@/lib/network/data";
 import { clock } from "@/lib/format";
+import { sgtClock } from "@/lib/time";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 
@@ -13,37 +14,49 @@ type StationOption = { slug: string; name: string };
 type JourneyOption = { key: string; name: string; sheltered: boolean };
 type Mode = "depart" | "leave_by" | "list";
 
+const DEBOUNCE_MS = 350;
+type Result = PlanResponse & { journey?: JourneyOption; shelteredAlternative?: { key: string; name: string } | null };
+
 export function Planner({
   stations,
   journeys = [],
+  defaultJourney,
   defaultFrom = "tiong-bahru",
   defaultTo = "shenton-way",
+  defaultWalkFrom = 0,
+  defaultWalkTo = 0,
+  defaultTime,
   remindersAvailable = false,
 }: {
   stations: StationOption[];
   journeys?: JourneyOption[];
+  /** Saved journey to start with; "" = pick stations. */
+  defaultJourney?: string;
   defaultFrom?: string;
   defaultTo?: string;
+  defaultWalkFrom?: number;
+  defaultWalkTo?: number;
+  /** "HH:MM" SGT, rendered by the server as "now" so SSR and client agree. */
+  defaultTime?: string;
   remindersAvailable?: boolean;
 }) {
   const { t } = useI18n();
   const { track } = useAnalytics();
-  const [journey, setJourney] = useState(journeys[0]?.key ?? "");
+  const [journey, setJourney] = useState(defaultJourney ?? journeys[0]?.key ?? "");
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
-  const [walkFrom, setWalkFrom] = useState(0);
-  const [walkTo, setWalkTo] = useState(0);
+  const [walkFrom, setWalkFrom] = useState(defaultWalkFrom);
+  const [walkTo, setWalkTo] = useState(defaultWalkTo);
   const [mode, setMode] = useState<Mode>("depart");
-  const [time, setTime] = useState("");
-  const [result, setResult] = useState<(PlanResponse & { journey?: JourneyOption; shelteredAlternative?: { key: string; name: string } | null }) | null>(null);
+  const [time, setTime] = useState(defaultTime ?? "");
+  const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reminded, setReminded] = useState<number | null>(null);
+  const seq = useRef(0);
+  const touched = useRef(false);
 
-  async function run(e?: React.FormEvent) {
-    e?.preventDefault();
-    setBusy(true);
-    setError(null);
+  const query = useMemo(() => {
     const q = new URLSearchParams({ mode });
     if (time) q.set("time", time);
     if (journey) q.set("journey", journey);
@@ -53,28 +66,69 @@ export function Planner({
       q.set("walkFrom", String(walkFrom));
       q.set("walkTo", String(walkTo));
     }
-    const res = await fetch(`/api/plan?${q}`, { cache: "no-store" }).catch(() => null);
-    setBusy(false);
-    if (!res?.ok) {
-      setResult(null);
-      setError(t("plan.noRoute"));
-      return;
-    }
-    const body = (await res.json()) as PlanResponse & { journey?: JourneyOption; shelteredAlternative?: { key: string; name: string } | null };
-    setResult(body);
-    const rides = body.legs.filter((l) => l.kind === "ride");
-    const first = rides[0];
-    const last = rides.at(-1);
-    const ownerFrom = (first?.kind === "ride" && PLATFORMS[first.from]?.station) || from;
-    const ownerTo = (last?.kind === "ride" && PLATFORMS[last.to]?.station) || to;
-    track("planner_query", {
-      from_station: journey ? ownerFrom : from,
-      to_station: journey ? ownerTo : to,
-      mode,
-      transfers: Math.min(2, Math.max(0, rides.length - 1)),
-      journey_type: journey ? "owner_saved" : "public",
-    });
-    track("journey_view", journey ? { journey_type: "owner_saved", journey_key: journey } : { journey_type: "public" });
+    return q.toString();
+  }, [mode, time, journey, from, to, walkFrom, walkTo]);
+
+  const run = useCallback(
+    async (q: string, userInitiated: boolean) => {
+      const id = ++seq.current;
+      setBusy(true);
+      setError(null);
+      const res = await fetch(`/api/plan?${q}`, { cache: "no-store" }).catch(() => null);
+      if (id !== seq.current) return; // a newer query superseded this one
+      setBusy(false);
+      if (!res?.ok) {
+        setResult(null);
+        setError(t("plan.noRoute"));
+        return;
+      }
+      const body = (await res.json()) as Result;
+      if (id !== seq.current) return;
+      setResult(body);
+      // Only count queries the visitor asked for, not the automatic first plan.
+      if (!userInitiated) return;
+      const rides = body.legs.filter((l) => l.kind === "ride");
+      const first = rides[0];
+      const last = rides.at(-1);
+      const p = new URLSearchParams(q);
+      const ownerFrom = (first?.kind === "ride" && PLATFORMS[first.from]?.station) || p.get("from") || "";
+      const ownerTo = (last?.kind === "ride" && PLATFORMS[last.to]?.station) || p.get("to") || "";
+      const saved = p.get("journey");
+      track("planner_query", {
+        from_station: ownerFrom,
+        to_station: ownerTo,
+        mode: (p.get("mode") as Mode) ?? "depart",
+        transfers: Math.min(2, Math.max(0, rides.length - 1)),
+        journey_type: saved ? "owner_saved" : "public",
+      });
+      track("journey_view", saved ? { journey_type: "owner_saved", journey_key: saved } : { journey_type: "public" });
+    },
+    [t, track],
+  );
+
+  // Plan on load, then re-plan (debounced) whenever an input changes.
+  useEffect(() => {
+    const user = touched.current;
+    const timer = setTimeout(() => void run(query, user), user ? DEBOUNCE_MS : 0);
+    return () => clearTimeout(timer);
+  }, [query, run]);
+
+  function edit<V>(set: (v: V) => void) {
+    return (v: V) => {
+      touched.current = true;
+      set(v);
+    };
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    touched.current = true;
+    void run(query, true);
+  }
+
+  function setNowTime() {
+    touched.current = true;
+    setTime(sgtClock(Date.now()));
   }
 
   async function remind(plan: Plan) {
@@ -92,11 +146,11 @@ export function Planner({
 
   return (
     <div className="space-y-4">
-      <form onSubmit={run} className="panel grid gap-3 p-4 sm:grid-cols-2">
+      <form onSubmit={submit} className="panel grid gap-3 p-4 sm:grid-cols-2" aria-busy={busy}>
         {journeys.length > 0 && (
           <label className="text-sm text-muted sm:col-span-2">
             {t("plan.journey")}
-            <select className="field mt-1" value={journey} onChange={(e) => setJourney(e.target.value)}>
+            <select className="field mt-1" value={journey} onChange={(e) => edit(setJourney)(e.target.value)}>
               {journeys.map((j) => (
                 <option key={j.key} value={j.key}>
                   {j.name}
@@ -108,10 +162,10 @@ export function Planner({
         )}
         {!journey && (
           <>
-            <StationSelect label={t("plan.from")} value={from} onChange={setFrom} stations={stations} />
-            <StationSelect label={t("plan.to")} value={to} onChange={setTo} stations={stations} />
-            <NumberField label={t("plan.walkFrom")} value={walkFrom} onChange={setWalkFrom} />
-            <NumberField label={t("plan.walkTo")} value={walkTo} onChange={setWalkTo} />
+            <StationSelect label={t("plan.from")} value={from} onChange={edit(setFrom)} stations={stations} />
+            <StationSelect label={t("plan.to")} value={to} onChange={edit(setTo)} stations={stations} />
+            <NumberField label={t("plan.walkFrom")} value={walkFrom} onChange={edit(setWalkFrom)} />
+            <NumberField label={t("plan.walkTo")} value={walkTo} onChange={edit(setWalkTo)} />
           </>
         )}
         <fieldset className="sm:col-span-2">
@@ -122,7 +176,7 @@ export function Planner({
                 key={m}
                 type="button"
                 aria-pressed={mode === m}
-                onClick={() => setMode(m)}
+                onClick={() => edit(setMode)(m)}
                 className={`flex-1 rounded-lg border px-2 py-2 text-sm ${mode === m ? "border-led bg-led text-black" : "border-line"}`}
               >
                 {t(`plan.mode.${m}`)}
@@ -131,12 +185,17 @@ export function Planner({
           </div>
         </fieldset>
         <label className="text-sm text-muted">
-          {t("plan.time")}
-          <input type="time" className="field mt-1" value={time} onChange={(e) => setTime(e.target.value)} placeholder={t("plan.now")} />
+          {t("plan.time")} <span className="text-[11px]">(SGT)</span>
+          <span className="mt-1 flex gap-2">
+            <input type="time" className="field" value={time} onChange={(e) => edit(setTime)(e.target.value)} />
+            <button type="button" className="btn btn-secondary shrink-0 px-3 py-2 text-sm" onClick={setNowTime}>
+              {t("plan.setNow")}
+            </button>
+          </span>
         </label>
         <div className="flex items-end">
           <button className="btn btn-primary w-full" disabled={busy}>
-            {t("plan.go")}
+            {busy ? t("plan.updating") : t("plan.go")}
           </button>
         </div>
       </form>
@@ -148,7 +207,7 @@ export function Planner({
             <p className="flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">
               <CloudRain size={16} aria-hidden /> {t("plan.rain", { area: result.rain.area, forecast: result.rain.forecast })}
               {result.shelteredAlternative && (
-                <button type="button" className="ml-auto underline" onClick={() => setJourney(result.shelteredAlternative!.key)}>
+                <button type="button" className="ml-auto underline" onClick={() => edit(setJourney)(result.shelteredAlternative!.key)}>
                   {result.shelteredAlternative.name}
                 </button>
               )}

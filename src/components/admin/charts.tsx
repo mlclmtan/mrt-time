@@ -1,10 +1,35 @@
 /** Lightweight server-rendered SVG charts for the admin dashboard. */
 import Link from "next/link";
+import { getT } from "@/lib/i18n/server";
+
+/** Placeholder with faint axes so an empty range still reads as a chart. */
+export async function EmptyChart({ kind = "chart" }: { kind?: "chart" | "table" }) {
+  const { t } = await getT();
+  return (
+    <figure className="relative" role="img" aria-label={t("admin.noData")}>
+      {kind === "chart" ? (
+        <svg viewBox="0 0 600 120" className="h-24 w-full" aria-hidden>
+          <line x1="1" y1="4" x2="1" y2="116" stroke="var(--line)" strokeWidth="2" />
+          <line x1="1" y1="116" x2="599" y2="116" stroke="var(--line)" strokeWidth="2" />
+          {[29, 58, 87].map((y) => (
+            <line key={y} x1="1" y1={y} x2="599" y2={y} stroke="var(--line)" strokeDasharray="4 6" />
+          ))}
+        </svg>
+      ) : (
+        <div className="h-16 rounded-lg border border-dashed border-line" aria-hidden />
+      )}
+      <figcaption className="absolute inset-0 flex items-center justify-center text-sm text-muted">{t("admin.noData")}</figcaption>
+    </figure>
+  );
+}
 
 export function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="panel p-3">
-      <div className="text-xs text-muted">{label}</div>
+    <div className="panel flex flex-col p-3">
+      {/* Fixed two-line label height keeps the KPI row aligned when labels wrap. */}
+      <div className="line-clamp-2 h-8 text-xs leading-4 text-muted" title={label}>
+        {label}
+      </div>
       <div className="led text-2xl font-bold">{typeof value === "number" ? value.toLocaleString("en-SG") : value}</div>
       {hint && <div className="text-[11px] text-muted">{hint}</div>}
     </div>
@@ -27,8 +52,8 @@ export function Card({ title, csv, children }: { title: string; csv?: string; ch
   );
 }
 
-export function BarList({ rows, empty = "—" }: { rows: { key: string; n: number }[]; empty?: string }) {
-  if (!rows.length) return <p className="text-sm text-muted">{empty}</p>;
+export function BarList({ rows }: { rows: { key: string; n: number }[] }) {
+  if (!rows.length) return <EmptyChart />;
   const max = Math.max(...rows.map((r) => r.n), 1);
   return (
     <ul className="space-y-1.5 text-sm">
@@ -48,7 +73,7 @@ export function BarList({ rows, empty = "—" }: { rows: { key: string; n: numbe
 }
 
 export function LineChart({ points, height = 120 }: { points: { x: string; y: number }[]; height?: number }) {
-  if (!points.length) return <p className="text-sm text-muted">—</p>;
+  if (!points.length || points.every((p) => !p.y)) return <EmptyChart />;
   const w = 600;
   const max = Math.max(...points.map((p) => p.y), 1);
   const step = points.length > 1 ? w / (points.length - 1) : 0;
@@ -73,6 +98,7 @@ export function LineChart({ points, height = 120 }: { points: { x: string; y: nu
 }
 
 export function Heatmap({ cells }: { cells: { dow: number; hour: number; n: number }[] }) {
+  if (!cells.some((c) => c.n > 0)) return <EmptyChart />;
   const max = Math.max(...cells.map((c) => c.n), 1);
   const get = (d: number, h: number) => cells.find((c) => c.dow === d && c.hour === h)?.n ?? 0;
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -103,6 +129,7 @@ export function Heatmap({ cells }: { cells: { dow: number; hour: number; n: numb
 }
 
 export function FunnelBars({ steps }: { steps: { label: string; n: number }[] }) {
+  if (!steps.some((s) => s.n > 0)) return <EmptyChart />;
   const top = Math.max(steps[0]?.n ?? 0, 1);
   return (
     <ol className="space-y-2 text-sm">
@@ -126,7 +153,7 @@ export function FunnelBars({ steps }: { steps: { label: string; n: number }[] })
 export function CohortTable({ rows, weekLabel, cohortLabel }: { rows: { cohort: string; week_offset: number; users: number }[]; weekLabel: (n: number) => string; cohortLabel: string }) {
   const cohorts = [...new Set(rows.map((r) => r.cohort))];
   const maxWeek = Math.max(0, ...rows.map((r) => r.week_offset));
-  if (!cohorts.length) return <p className="text-sm text-muted">—</p>;
+  if (!cohorts.length) return <EmptyChart kind="table" />;
   return (
     <div className="overflow-x-auto">
       <table className="tabular text-xs">
@@ -164,7 +191,7 @@ export function CohortTable({ rows, weekLabel, cohortLabel }: { rows: { cohort: 
 }
 
 export function DataTable({ rows }: { rows: Record<string, unknown>[] }) {
-  if (!rows.length) return <p className="text-sm text-muted">—</p>;
+  if (!rows.length) return <EmptyChart kind="table" />;
   const cols = Object.keys(rows[0]);
   return (
     <div className="overflow-x-auto">

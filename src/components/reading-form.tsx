@@ -8,7 +8,16 @@ import { useI18n } from "./i18n";
 const PLATFORM_LIST = Object.values(PLATFORMS).sort((a, b) => a.code.localeCompare(b.code));
 
 /** Station + direction + number pad for up to 3 trains. Optional photo is never stored. */
-export function ReadingForm({ defaultStation = "EW17", defaultDirection }: { defaultStation?: string; defaultDirection?: string }) {
+export function ReadingForm({
+  defaultStation = "EW17",
+  defaultDirection,
+  onSaved,
+}: {
+  defaultStation?: string;
+  defaultDirection?: string;
+  /** Called once the reading is stored (e.g. to recompute predictions). */
+  onSaved?: (status: "approved" | "pending") => void;
+}) {
   const { t, locale } = useI18n();
   const { track, deviceId } = useAnalytics();
   const [station, setStation] = useState(defaultStation);
@@ -48,6 +57,7 @@ export function ReadingForm({ defaultStation = "EW17", defaultDirection }: { def
     setState({ kind: body.status });
     setSlots(["", "", ""]);
     setActive(0);
+    onSaved?.(body.status);
   }
 
   return (

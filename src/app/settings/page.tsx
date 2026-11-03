@@ -3,7 +3,7 @@ import { getT } from "@/lib/i18n/server";
 import { getSession } from "@/lib/auth/server";
 import { pushAvailable } from "@/lib/push/config";
 import { ConsentSettings } from "@/components/analytics/consent-banner";
-import { VersionTag } from "@/components/update-banner";
+import { VersionFooter } from "@/components/version-footer";
 import { LanguageSwitch } from "@/components/language-switch";
 import { OwnerSettings } from "@/components/owner/owner-settings";
 
@@ -14,6 +14,7 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-xl space-y-5 pt-6">
       <h1 className="text-3xl font-bold">{t("settings.title")}</h1>
+      <VersionFooter className="-mt-3" />
       <section className="panel space-y-3 p-4">
         <h2 className="font-semibold">{t("settings.consent")}</h2>
         <ConsentSettings />
@@ -27,10 +28,6 @@ export default async function SettingsPage() {
         <p className="text-sm text-muted">{t("settings.installIos")}</p>
       </section>
       {session?.user && <OwnerSettings isOwner={session.user.role === "owner"} pushReady={pushAvailable()} vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />}
-      <section className="panel p-4">
-        <h2 className="font-semibold">{t("settings.version")}</h2>
-        <VersionTag />
-      </section>
     </div>
   );
 }

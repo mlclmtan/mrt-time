@@ -50,7 +50,7 @@ export function NpsPrompt() {
 
   if (!show) return null;
   return (
-    <div role="dialog" aria-labelledby="nps-q" className="fixed inset-x-0 bottom-16 z-40 p-3">
+    <div role="dialog" aria-labelledby="nps-q" className="fixed inset-x-0 bottom-[calc(var(--consent-h,0px)+4rem)] z-40 p-3">
       <div className="panel rise mx-auto max-w-md space-y-3 p-4">
         {done ? (
           <p className="text-go">{t("nps.thanks")}</p>

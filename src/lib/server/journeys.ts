@@ -6,6 +6,7 @@ import { journey, place } from "../db/schema";
 import { findRoutes, getPlatform, getStation, stationForCode } from "../network";
 import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan } from "../journey/plan";
 import { isRainy, predictionSource } from "../journey/source";
+import { commuteView, type CommuteProgress, type CommuteView } from "../journey/commute";
 import { getUnstableWindows, loadObservations } from "./observations";
 import { twoHourForecast } from "./weather";
 import { affectedLines, lineAlerts } from "./lta";
@@ -98,6 +99,20 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
     rain: area && text ? { area, forecast: text, rainy: isRainy(text) } : null,
     alertLines: lines.filter((l) => affected.includes(l)),
   };
+}
+
+/**
+ * Owner Home: next departures + "leave now" for the remaining legs of a
+ * journey. Reads observations fresh every call, so a reading saved a
+ * moment ago becomes the same-day anchor immediately.
+ */
+export async function commuteFor(journey: OwnerJourney, progress: CommuteProgress, now: number): Promise<CommuteView> {
+  const rides = ridesOf(journey.legs.slice(progress.fromLeg));
+  const [observations, windows] = await Promise.all([
+    loadObservations([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => []),
+    getUnstableWindows(now),
+  ]);
+  return commuteView(journey.key, journey.legs, progress, predictionSource(observations, windows), now);
 }
 
 /** Legs for a public route between two stations (≤ 2 transfers). */

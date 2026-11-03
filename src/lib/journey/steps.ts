@@ -28,8 +28,9 @@ export function nextStepIndex(steps: Step[], logged: { kind: string; station?: s
   return Math.min(i, steps.length);
 }
 
-/** Morning → first journey from home; afternoon → back home. */
+/** Before 14:00 SGT → the journey from home; from 14:00 → back home. */
+export const JOURNEY_SWITCH_HOUR = 14;
 export function suggestedJourney<J extends { key: string; fromPlace: string | null }>(journeys: J[], sgtHour: number): J | undefined {
-  const wantFrom = sgtHour < 12 ? "home" : "office";
+  const wantFrom = sgtHour < JOURNEY_SWITCH_HOUR ? "home" : "office";
   return journeys.find((j) => j.fromPlace === wantFrom) ?? journeys[0];
 }
