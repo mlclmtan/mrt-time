@@ -6,3 +6,14 @@ node_modules/
 .DS_Store
 *.log
 .vercel
+
+# owner data + local artifacts
+private/
+SPEC-revamp-draft.md
+.claude-brief*.md
+claude-run*.json
+claude-run.err
+.env*
+!.env.example
+.vercel
+*.tsbuildinfo
