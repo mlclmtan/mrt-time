@@ -17,3 +17,6 @@ claude-run.err
 !.env.example
 .vercel
 *.tsbuildinfo
+.next/
+next-env.d.ts
+coverage/
