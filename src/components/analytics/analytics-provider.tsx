@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
 import { validateEvent, type EventName, type EventProps } from "@/lib/analytics/events";
 import { consentModeSignals, type Consent } from "@/lib/analytics/consent";
-import { ga4Params, metaEventFor, type UserType } from "@/lib/analytics/mapping";
+import { GA4_DIMENSIONS, ga4Params, metaEventFor, type UserType } from "@/lib/analytics/mapping";
 import { tagIdsFromEnv } from "@/lib/analytics/scripts";
 import { utmFromSearch, type Utm } from "@/lib/analytics/utm";
 import { pageTypeFor } from "@/lib/analytics/page-type";
@@ -100,10 +100,13 @@ export function AnalyticsProvider({
       const w = window as W;
       const params = ga4Params(name, checked.props, { language: locale, standalone, userType, experiments, kolHandle, campaign: utm.current?.campaign });
       if (c.analytics || c.marketing) {
-        if (IDS.gtmId) w.dataLayer?.push({ event: name, ...params });
+        // Reset every dimension so values never carry over between GTM events.
+        const cleared = Object.fromEntries(GA4_DIMENSIONS.map((d) => [d, undefined]));
+        if (IDS.gtmId) w.dataLayer?.push({ ...cleared, event: name, ...params });
         else w.gtag?.("event", name, params);
       }
-      const meta = c.marketing ? metaEventFor(name, checked.props) : null;
+      // Owner/analyst traffic never goes to ad platforms.
+      const meta = c.marketing && userType === "visitor" ? metaEventFor(name, checked.props) : null;
       if (meta && w.fbq) w.fbq(meta.custom ? "trackCustom" : "track", meta.event, meta.data, { eventID: eventId });
     },
     [experiments, locale, userType],

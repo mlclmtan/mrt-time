@@ -15,7 +15,8 @@ import { sgtDate, DAY } from "../src/lib/time";
 
 const now = Date.now();
 const dryRun = process.argv.includes("--dry-run");
-const dates = [3, 2, 1].map((d) => sgtDate(now - d * DAY)).concat(sgtDate(now));
+// Complete past days only; the daily cron sends each new day once (days already sent are skipped).
+const dates = [3, 2, 1].map((d) => sgtDate(now - d * DAY));
 runSandbox({ dates, now, mode: "script", dryRun })
   .then((results) => {
     for (const r of results) console.log(`${r.day}: ${r.users} users, ${r.events} events, ${r.requests} requests — ${r.status}${r.error ? ` (${r.error})` : ""}`);

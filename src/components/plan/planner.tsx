@@ -74,7 +74,7 @@ export function Planner({
       transfers: Math.min(2, Math.max(0, rides.length - 1)),
       journey_type: journey ? "owner_saved" : "public",
     });
-    if (journey) track("journey_view", { journey_type: "owner_saved", journey_key: journey });
+    track("journey_view", journey ? { journey_type: "owner_saved", journey_key: journey } : { journey_type: "public" });
   }
 
   async function remind(plan: Plan) {

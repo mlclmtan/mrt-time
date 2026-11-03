@@ -56,7 +56,7 @@ export function buildEventRow(
   };
   let capi: Record<string, unknown> | undefined;
   const meta = metaEventFor(event.name, event.props);
-  if (meta && env.consent.marketing && capiConfigured())
+  if (meta && env.consent.marketing && ctx.userType === "visitor" && capiConfigured())
     capi = capiPayload(
       meta,
       {

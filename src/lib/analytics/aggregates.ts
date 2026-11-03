@@ -184,9 +184,9 @@ export function kolFunnelQuery(r: Range) {
     select l.handle,
            count(distinct l.device_id)::int as visits,
            count(distinct l.device_id) filter (where exists (
-             select 1 from event_log e where e.device_id = l.device_id and e.name = 'planner_query' and e.ts >= l.t))::int as planner,
+             select 1 from event_log e where e.device_id = l.device_id and e.name = 'planner_query' and e.ts >= l.t and e.ts < ${r.to.toISOString()}::timestamptz))::int as planner,
            count(distinct l.device_id) filter (where exists (
-             select 1 from event_log e where e.device_id = l.device_id and e.name = 'app_installed' and e.ts >= l.t))::int as installs,
+             select 1 from event_log e where e.device_id = l.device_id and e.name = 'app_installed' and e.ts >= l.t and e.ts < ${r.to.toISOString()}::timestamptz))::int as installs,
            count(distinct l.device_id) filter (where exists (
              select 1 from event_log e where e.device_id = l.device_id
                and ${sgt(sql`e.ts`)}::date > ${sgt(sql`l.t`)}::date
