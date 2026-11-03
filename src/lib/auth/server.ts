@@ -21,6 +21,8 @@ function createAuth() {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET || "missing",
       },
     },
+    // The owner row is pre-created by scripts/seed.ts; link Google to it on first sign-in.
+    account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
     // Privacy: never store IP addresses on sessions.
     advanced: { ipAddress: { disableIpTracking: true } },
     session: {
