@@ -3,6 +3,7 @@ import { timed } from "@/lib/server/metrics";
 import { getSession } from "@/lib/auth/server";
 import { ownerJourneys, planJourney, publicLegs, type PlanMode } from "@/lib/server/journeys";
 import { sgtDate, sgtInstant } from "@/lib/time";
+import { shelteredSuggestion } from "@/lib/journey/source";
 
 function parseWhen(value: string | null, now: number): number | null {
   if (!value) return now;
@@ -33,9 +34,18 @@ export const GET = timed("/api/plan", async (request) => {
   if (journeyKey) {
     const session = await getSession();
     if (session?.user.role !== "owner") return json({ error: "Please sign in." }, 401);
-    const journey = (await ownerJourneys(session.user.id)).find((j) => j.key === journeyKey);
+    const all = await ownerJourneys(session.user.id);
+    const journey = all.find((j) => j.key === journeyKey);
     if (!journey) return json({ error: "Unknown journey" }, 404);
-    return json({ journey: { key: journey.key, name: journey.name, sheltered: journey.sheltered }, ...(await planJourney(journey.legs, mode, at)) });
+    const planned = await planJourney(journey.legs, mode, at);
+    // Rain: point at the sheltered variant of the same trip, if this one isn't.
+    const variants = all.filter((j) => j.fromPlace === journey.fromPlace && j.toPlace === journey.toPlace);
+    const sheltered = !journey.sheltered ? shelteredSuggestion(variants, planned.rain?.rainy ?? false) : null;
+    return json({
+      journey: { key: journey.key, name: journey.name, sheltered: journey.sheltered },
+      shelteredAlternative: sheltered ? { key: sheltered.key, name: sheltered.name } : null,
+      ...planned,
+    });
   }
 
   const legs = publicLegs(p.get("from") || "", p.get("to") || "", clampMin(p.get("walkFrom")), clampMin(p.get("walkTo")));

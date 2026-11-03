@@ -37,7 +37,7 @@ describe("event ingestion", () => {
 
   it("server page hits are aggregate-only", () => {
     const row = serverPageHitRow({ path: "/about?x=1", headers: headers(), language: "en", now: ctx.now })!;
-    expect(row).toMatchObject({ aggregateOnly: true, origin: "server", route: "/about" });
+    expect(row).toMatchObject({ aggregateOnly: true, origin: "server", route: "/about", props: { page_type: "about" } });
     expect(row.deviceId).toBeUndefined();
   });
 });

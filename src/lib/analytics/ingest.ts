@@ -6,6 +6,7 @@ import { cleanReferrer, cleanRoute, envelopeSchema, validateEvent, type Envelope
 import { coarseUa, geoFromHeaders } from "./request";
 import { metaEventFor, type UserType } from "./mapping";
 import { capiConfigured, capiPayload, sendCapi } from "./meta-capi";
+import { pageTypeFor } from "./page-type";
 
 export type IngestResult = { ok: true; row: typeof eventLog.$inferInsert; capi?: Record<string, unknown> } | { ok: false; error: string };
 
@@ -106,7 +107,7 @@ export function serverPageHitRow(input: { path: string; headers: Headers; langua
     userType: "visitor",
     route: cleanRoute(input.path),
     referrer: cleanReferrer(input.headers.get("referer")),
-    props: { page_type: "other" },
+    props: { page_type: pageTypeFor(cleanRoute(input.path)) },
     language: input.language,
     country: geo.country,
     region: geo.region,

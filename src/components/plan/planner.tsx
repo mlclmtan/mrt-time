@@ -35,7 +35,7 @@ export function Planner({
   const [walkTo, setWalkTo] = useState(0);
   const [mode, setMode] = useState<Mode>("depart");
   const [time, setTime] = useState("");
-  const [result, setResult] = useState<(PlanResponse & { journey?: JourneyOption }) | null>(null);
+  const [result, setResult] = useState<(PlanResponse & { journey?: JourneyOption; shelteredAlternative?: { key: string; name: string } | null }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reminded, setReminded] = useState<number | null>(null);
@@ -60,7 +60,7 @@ export function Planner({
       setError(t("plan.noRoute"));
       return;
     }
-    const body = (await res.json()) as PlanResponse & { journey?: JourneyOption };
+    const body = (await res.json()) as PlanResponse & { journey?: JourneyOption; shelteredAlternative?: { key: string; name: string } | null };
     setResult(body);
     const rides = body.legs.filter((l) => l.kind === "ride");
     const first = rides[0];
@@ -147,6 +147,11 @@ export function Planner({
           {result.rain?.rainy && (
             <p className="flex items-center gap-2 rounded-lg bg-accent/10 px-3 py-2 text-sm text-accent">
               <CloudRain size={16} aria-hidden /> {t("plan.rain", { area: result.rain.area, forecast: result.rain.forecast })}
+              {result.shelteredAlternative && (
+                <button type="button" className="ml-auto underline" onClick={() => setJourney(result.shelteredAlternative!.key)}>
+                  {result.shelteredAlternative.name}
+                </button>
+              )}
             </p>
           )}
           {result.alertLines.length > 0 && (
