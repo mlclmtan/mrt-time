@@ -4,6 +4,7 @@
  * text can pass these schemas. See docs/analytics.md.
  */
 import { z } from "zod";
+import { AD_FORMATS, AD_PLACEMENTS } from "../ads/formats";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,47}$/);
 const code = z.string().regex(/^[A-Z]{2}\d{1,2}$/); // platform code e.g. EW17
@@ -45,6 +46,14 @@ export const TRIP_KINDS = [
 ] as const;
 
 export const FEEDBACK_CATEGORIES = ["accuracy", "planner", "design", "bug", "idea", "other"] as const;
+
+/** House-ad events (GA4 ad_impression / ad_viewable / ad_click). */
+const adEvent = z.strictObject({
+  creative_id: z.number().int().positive(),
+  format: z.enum(AD_FORMATS),
+  placement: z.enum(AD_PLACEMENTS),
+  campaign: slug,
+});
 
 export const EVENT_SCHEMAS = {
   page_view: z.strictObject({ page_type: z.enum(PAGE_TYPES), station: slug.optional() }),
@@ -100,6 +109,9 @@ export const EVENT_SCHEMAS = {
   kol_landing: z.strictObject({ kol_handle: slug, code_used: z.boolean() }),
   campaign_landing: z.strictObject({ campaign: slug, source: slug, medium: slug }),
   consent_update: z.strictObject({ analytics: z.boolean(), marketing: z.boolean() }),
+  ad_impression: adEvent,
+  ad_viewable: adEvent,
+  ad_click: adEvent,
   web_vital: z.strictObject({
     metric: z.enum(["LCP", "INP", "CLS", "TTFB", "FCP"]),
     value: z.number().min(0).max(600_000),

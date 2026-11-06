@@ -68,6 +68,21 @@ await page("/terms");
 await page("/media-kit");
 await page("/zh-Hant");
 await page("/sign-in");
+await page("/add", "Add a board reading");
+await check("GET /submit → /add", async () => {
+  const { res } = await get("/submit");
+  assert([301, 308].includes(res.status), `status ${res.status}`);
+  assert((res.headers.get("location") || "").endsWith("/add"), `location ${res.headers.get("location")}`);
+  return `${res.status} → /add`;
+});
+await check("GET /ads.txt", async () => {
+  const { res } = await get("/ads.txt", "text/plain");
+  if (res.status === 404) return "404 (AdSense not configured)";
+  assert(res.status === 200, `status ${res.status}`);
+  const body = await res.text();
+  assert(/^google\.com, pub-\d+, DIRECT, f08c47fec0942fa0$/m.test(body), "bad ads.txt line");
+  return body.trim();
+});
 await page("/robots.txt", "Sitemap");
 await page("/sitemap.xml", "/station/tiong-bahru");
 await check("GET /manifest.webmanifest", async () => {
@@ -100,6 +115,7 @@ await check("GET /api/board?station=tiong-bahru", async () => {
       assert(pr && ["times", "range", "closed"].includes(pr.kind), `${p.code} ${d.key}: bad prediction kind`);
       assert(["high", "medium", "low"].includes(pr.confidence), `${p.code} ${d.key}: bad confidence`);
       assert(pr.reason && typeof pr.reason.code === "string", `${p.code} ${d.key}: no reason`);
+      assert(d.board && typeof d.board.en === "string", `${p.code} ${d.key}: no board destination name`);
       if (pr.kind === "times") assert(pr.arrivals.length > 0, `${p.code} ${d.key}: times without arrivals`);
       if (pr.kind === "range") assert(pr.waitMin.max > 0, `${p.code} ${d.key}: range without wait`);
     }

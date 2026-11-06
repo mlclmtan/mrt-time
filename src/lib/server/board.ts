@@ -6,6 +6,8 @@ import { getUnstableWindows, loadObservations } from "./observations";
 export type BoardDirection = {
   key: string;
   label: { en: string; "zh-Hant": string };
+  /** Destination as the platform board shows it ("Pasir Ris"). */
+  board: { en: string; "zh-Hant": string };
   terminal: string;
   prediction: Prediction;
 };
@@ -44,6 +46,7 @@ export async function stationBoard(slug: string, now = Date.now()): Promise<Boar
           .map((d) => ({
             key: d.key,
             label: d.label,
+            board: d.board,
             terminal: d.terminal,
             prediction: predict({ line: line.code, direction: d.key, station: code, now, observations, unstableWindows: windows }),
           })),

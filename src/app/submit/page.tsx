@@ -1,20 +1,9 @@
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 import { getT } from "@/lib/i18n/server";
-import { pageMetadata } from "@/lib/seo";
-import { ReadingForm } from "@/components/reading-form";
+import { localePath } from "@/lib/i18n";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { locale, t } = await getT();
-  return pageMetadata({ locale, path: "/submit", title: t("reading.title"), description: t("reading.intro") });
-}
-
+/** The old "Add a reading" address; the rebuilt flow lives at /add. */
 export default async function SubmitPage() {
-  const { t } = await getT();
-  return (
-    <div className="space-y-4 pt-6">
-      <h1 className="text-3xl font-bold">{t("reading.title")}</h1>
-      <p className="text-muted">{t("reading.intro")}</p>
-      <ReadingForm />
-    </div>
-  );
+  const { locale } = await getT();
+  permanentRedirect(localePath(locale, "/add"));
 }

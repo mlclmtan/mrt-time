@@ -4,7 +4,9 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getSession } from "@/lib/auth/server";
 import { dbConfigured, getDb } from "@/lib/db";
-import { appSetting, campaign, experiment, kol, observation } from "@/lib/db/schema";
+import { adCampaign, adCreative, appSetting, campaign, experiment, kol, observation } from "@/lib/db/schema";
+import { parseCampaignForm, parseCreativeForm } from "@/lib/ads/admin-input";
+import { clearAdCatalog } from "@/lib/server/ads";
 import { buildCampaignUrl, utmToken } from "@/lib/analytics/utm";
 import { clearWindowsCache } from "@/lib/server/observations";
 import { appUrl } from "@/lib/seo";
@@ -120,4 +122,26 @@ export async function saveUnstableWindows(formData: FormData) {
     .onConflictDoUpdate({ target: appSetting.key, set: { value: windows, updatedAt: new Date() } });
   clearWindowsCache();
   revalidatePath("/admin/settings");
+}
+
+export async function saveAdCampaign(formData: FormData) {
+  await owner();
+  const parsed = parseCampaignForm(formData);
+  if (!parsed) return;
+  const db = getDb();
+  if (parsed.id) await db.update(adCampaign).set({ ...parsed.values, updatedAt: new Date() }).where(eq(adCampaign.id, parsed.id));
+  else await db.insert(adCampaign).values(parsed.values).onConflictDoNothing();
+  clearAdCatalog();
+  revalidatePath("/admin/ads");
+}
+
+export async function saveAdCreative(formData: FormData) {
+  await owner();
+  const parsed = parseCreativeForm(formData);
+  if (!parsed) return;
+  const db = getDb();
+  if (parsed.id) await db.update(adCreative).set({ ...parsed.values, updatedAt: new Date() }).where(eq(adCreative.id, parsed.id));
+  else await db.insert(adCreative).values(parsed.values);
+  clearAdCatalog();
+  revalidatePath("/admin/ads");
 }

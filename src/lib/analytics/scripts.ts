@@ -4,6 +4,7 @@
  * validated so env values can never inject script.
  */
 import { consentModeSignals, type Consent } from "./consent";
+import { adSenseScripts } from "../ads/adsense";
 
 export type TagIds = {
   gtmId?: string;
@@ -11,6 +12,8 @@ export type TagIds = {
   adsId?: string;
   metaPixelId?: string;
   clarityId?: string;
+  /** AdSense publisher client, ca-pub-… */
+  adsenseClient?: string;
 };
 export type ScriptDescriptor = { id: string; src?: string; inline?: string };
 
@@ -20,6 +23,7 @@ const PATTERNS: Record<keyof TagIds, RegExp> = {
   adsId: /^AW-\d{5,15}$/,
   metaPixelId: /^\d{8,20}$/,
   clarityId: /^[a-z0-9]{6,16}$/,
+  adsenseClient: /^ca-pub-\d{10,20}$/,
 };
 
 export function cleanIds(ids: TagIds): TagIds {
@@ -39,6 +43,7 @@ export function tagIdsFromEnv(): TagIds {
     adsId: process.env.NEXT_PUBLIC_GOOGLE_ADS_ID,
     metaPixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID,
     clarityId: process.env.NEXT_PUBLIC_CLARITY_ID,
+    adsenseClient: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
   });
 }
 
@@ -96,5 +101,7 @@ export function thirdPartyScripts(
         `t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];` +
         `y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","${ids.clarityId}");`,
     });
+  // AdSense: any consent loads it; non-personalised unless marketing consent.
+  out.push(...adSenseScripts(consent, ids.adsenseClient, context));
   return out;
 }

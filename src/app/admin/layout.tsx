@@ -11,6 +11,7 @@ const NAV: [string, DictKey, boolean][] = [
   ["/admin", "admin.overview", false],
   ["/admin/submissions", "admin.submissions", true],
   ["/admin/campaigns", "admin.campaigns", false],
+  ["/admin/ads", "admin.ads", false],
   ["/admin/kols", "admin.kols", false],
   ["/admin/experiments", "admin.experiments", false],
   ["/admin/feedback", "admin.feedback", true],

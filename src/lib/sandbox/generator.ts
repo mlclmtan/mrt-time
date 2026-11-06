@@ -70,6 +70,20 @@ const LINES: Record<string, string> = {
   redhill: "EWL",
 };
 
+/**
+ * Synthetic ad delivery for practising ad reports: house formats with
+ * different CTRs/viewability, plus AdSense-like fills that carry
+ * ad_revenue (SGD, per impression) the way AdSense-linked GA4 does.
+ */
+export const SANDBOX_AD_FORMATS = [
+  { format: "google_search_text", campaign: "accuracy-report", creativeId: 4, ctr: 0.035, viewable: 0.85, weight: 2 },
+  { format: "meta_feed", campaign: "join-newsletter", creativeId: 3, ctr: 0.012, viewable: 0.65, weight: 3 },
+  { format: "meta_story", campaign: "install-mrt-time", creativeId: 1, ctr: 0.008, viewable: 0.75, weight: 2 },
+  { format: "google_display", campaign: "install-mrt-time", creativeId: 2, ctr: 0.004, viewable: 0.5, weight: 3 },
+] as const;
+/** Share of slot impressions filled by AdSense (the rest are house ads). */
+export const SANDBOX_ADSENSE_SHARE = 0.4;
+
 /** mulberry32 PRNG. */
 export function rng(seed: number) {
   let a = seed >>> 0;
@@ -188,6 +202,22 @@ export function generateDay(date: string): SyntheticDay {
     if (rand() < 0.75) {
       push("station_view", { station, line: LINES[station] });
       push("prediction_view", { station, line: LINES[station], confidence: rand() < 0.4 ? "high" : rand() < 0.6 ? "medium" : "low" });
+      if (rand() < 0.85) {
+        // One station-page ad: AdSense fill (with revenue) or a house creative.
+        if (rand() < SANDBOX_ADSENSE_SHARE) {
+          const ecpm = 1.5 + rand() * 2.5; // SGD per 1,000 impressions
+          const ad = { creative_id: 0, format: "google_display", placement: "station", campaign: "adsense", ad_source: "adsense" };
+          push("ad_impression", { ...ad, ad_revenue: Math.round((ecpm / 1000) * 1e6) / 1e6, currency: "SGD" }, 2);
+          if (rand() < 0.55) push("ad_viewable", ad, 1);
+          if (rand() < 0.006) push("ad_click", ad, 3);
+        } else {
+          const f = pick(rand, SANDBOX_AD_FORMATS.map((x) => ({ ...x })));
+          const ad = { creative_id: f.creativeId, format: f.format, placement: rand() < 0.7 ? "station" : "station_sponsored", campaign: f.campaign, ad_source: "house" };
+          push("ad_impression", ad, 2);
+          if (rand() < f.viewable) push("ad_viewable", ad, 1);
+          if (rand() < f.ctr) push("ad_click", ad, 3);
+        }
+      }
       const plannerRate = 0.38 * (user.variant === "countdown" ? 1.2 : 1) * (user.persona.key === "daily_commuter" ? 1.4 : 1);
       if (rand() < plannerRate) {
         push("planner_query", { journey_type: "public", mode: rand() < 0.6 ? "depart" : "list", transfers: Math.floor(rand() * 2) }, 30);

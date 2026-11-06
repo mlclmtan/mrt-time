@@ -27,6 +27,9 @@ export const GA4_DIMENSIONS = [
   "campaign",
   "traffic_type",
   "data_source",
+  "creative_id",
+  "format",
+  "placement",
 ] as const;
 
 export function ga4Params(name: EventName, props: Record<string, unknown>, ctx: EventContext) {

@@ -42,7 +42,7 @@ Leave `NEXT_PUBLIC_GTM_ID` empty and set `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXX
 
 **Variables** → **User-Defined Variables** → **New** → **Data Layer Variable**, version 2, one per parameter. Name them `DLV - <param>`:
 
-`station`, `line`, `direction`, `journey_type`, `confidence`, `standalone`, `language`, `user_type`, `experiment_id`, `variant`, `kol_handle`, `campaign`, `traffic_type`
+`station`, `line`, `direction`, `journey_type`, `confidence`, `standalone`, `language`, `user_type`, `experiment_id`, `variant`, `kol_handle`, `campaign`, `traffic_type`, `creative_id`, `format`, `placement`
 
 plus any event-specific params you want in GA4: `page_type`, `from_station`, `to_station`, `mode`, `transfers`, `basis`, `verdict`, `kind`, `status`, `trains`, `platform`, `method`, `content_type`, `domain`, `link_type`, `level`, `rating`, `category`, `score`, `double_opt_in`, `code_used`, `source`, `medium`, `metric`, `value`, `analytics`, `marketing`.
 
@@ -54,7 +54,7 @@ Built-in variable `Event` must be enabled (it is by default).
 2. **New** → **Custom Event**, name `MRT events`, event name (tick **Use regex matching**):
 
 ```
-^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital)$
+^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital|ad_impression|ad_viewable|ad_click)$
 ```
 
 Update this list when you add an event.
@@ -95,10 +95,13 @@ Admin → **Data display** → **Custom definitions** → **Create custom dimens
 | KOL handle | Event | `kol_handle` |
 | Campaign (app) | Event | `campaign` |
 | Traffic type | Event | `traffic_type` (optional; the data filter works without registering it) |
+| Ad creative ID | Event | `creative_id` (house ads, see docs/ads-setup.md) |
+| Ad format | Event | `format` |
+| Ad placement | Event | `placement` |
 
 `data_source` is in `GA4_DIMENSIONS` but is only sent to the **sandbox** property; do not register it here.
 
-Useful optional extras: `page_type`, `mode`, `basis`, `verdict`, `platform`, `content_type`, `category`. Standard properties have a cap on event-scoped custom dimensions (verify in the UI); the list above uses 13.
+Useful optional extras: `page_type`, `mode`, `basis`, `verdict`, `platform`, `content_type`, `category`. Standard properties have a cap on event-scoped custom dimensions (verify in the UI); the list above uses 16.
 
 Caveat: `station` holds a slug (`outram-park`) on `page_view`/`station_view` and a platform code (`TE17`) on board events. Always pair it with an event-name filter.
 

@@ -324,3 +324,90 @@ export const pushSubscription = pgTable("push_subscription", {
   userAgent: text("user_agent"),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+/* ---------------- House ads (publisher side, simulated Meta/Google units) ---------------- */
+
+/**
+ * Targeting is contextual only (no personal data): empty / missing arrays
+ * mean "any". timeBands use the prediction bands (weekday_am_peak, …).
+ */
+export type AdTargeting = {
+  stations?: string[]; // station slugs
+  lines?: string[]; // EWL | TEL | NEL
+  languages?: string[]; // en | zh-Hant
+  timeBands?: string[]; // weekday_am_peak | weekday_pm_peak | weekday_offpeak | weekend
+  devices?: string[]; // mobile | tablet | desktop
+};
+
+export const adCampaign = pgTable(
+  "ad_campaign",
+  {
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    advertiser: text("advertiser").notNull(),
+    objective: text("objective").notNull(), // awareness | traffic | conversion
+    status: text("status").notNull().default("active"), // active | paused | ended
+    startAt: ts("start_at").notNull().defaultNow(),
+    endAt: ts("end_at"),
+    dailyBudgetSgd: real("daily_budget_sgd").notNull(),
+    bidModel: text("bid_model").notNull(), // cpm | cpc
+    bidAmountSgd: real("bid_amount_sgd").notNull(),
+    targeting: jsonb("targeting").$type<AdTargeting>().notNull().default({}),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ad_campaign_status_idx").on(t.status)],
+);
+
+export const adCreative = pgTable(
+  "ad_creative",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => adCampaign.id, { onDelete: "cascade" }),
+    /** Stable key for idempotent seeding (null for creatives made in admin). */
+    ref: text("ref").unique(),
+    format: text("format").notNull(), // meta_feed | meta_story | google_display | google_search_text
+    headline: text("headline").notNull(),
+    primaryText: text("primary_text"),
+    description: text("description"),
+    imageUrl: text("image_url"),
+    /** Uploaded image as a data URL (≤ 200 KB), used when imageUrl is empty. */
+    imageData: text("image_data"),
+    ctaLabel: text("cta_label").notNull().default("Learn more"),
+    destinationUrl: text("destination_url").notNull(),
+    /** A/B rotation weight within the campaign. */
+    weight: integer("weight").notNull().default(1),
+    status: text("status").notNull().default("active"), // active | paused
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ad_creative_campaign_idx").on(t.campaignId)],
+);
+
+/** impression | viewable | click. Internal (owner/analyst) rows are excluded from reports and pacing. */
+export const adEvent = pgTable(
+  "ad_event",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    ts: ts("ts").notNull().defaultNow(),
+    type: text("type").notNull(),
+    creativeId: integer("creative_id")
+      .notNull()
+      .references(() => adCreative.id, { onDelete: "cascade" }),
+    campaignId: integer("campaign_id").notNull(),
+    format: text("format").notNull(),
+    placement: text("placement").notNull(),
+    /** Only with analytics consent. */
+    deviceId: text("device_id"),
+    sessionId: text("session_id"),
+    internal: boolean("internal").notNull().default(false),
+  },
+  (t) => [
+    index("ad_event_ts_idx").on(t.ts),
+    index("ad_event_campaign_ts_idx").on(t.campaignId, t.ts),
+    index("ad_event_session_idx").on(t.sessionId, t.ts),
+  ],
+);

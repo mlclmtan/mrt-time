@@ -21,6 +21,31 @@ export const readingInput = z
 
 export type ReadingInput = z.infer<typeof readingInput>;
 
+/** Public readings may be dated at most this far back (UI allows 30; 2 min slack). */
+export const PUBLIC_SEEN_AGO_MAX_MIN = 32;
+
+/** The quick-entry body: exactly { station, direction, minutes[], seenAt }. */
+export const readingPost = z.strictObject({
+  station: z.string(),
+  direction: z.string(),
+  minutes: z.array(z.number()),
+  seenAt: z.string().datetime({ offset: true }),
+});
+
+/** Accepts the flat quick-entry body or the legacy `{ deviceId, reading }` envelope. */
+export function parseReadingBody(body: Record<string, unknown> | null): ReadingInput | null {
+  if (!body) return null;
+  if ("reading" in body) {
+    const legacy = readingInput.safeParse(body.reading);
+    return legacy.success ? legacy.data : null;
+  }
+  const flat = readingPost.safeParse(body);
+  if (!flat.success) return null;
+  const { seenAt, ...rest } = flat.data;
+  const parsed = readingInput.safeParse({ ...rest, capturedAt: seenAt });
+  return parsed.success ? parsed.data : null;
+}
+
 export function validPlatformDirection(station: string, direction: string) {
   const platform = getPlatform(station);
   return platform && isValidDirection(platform.line, direction) ? platform : null;

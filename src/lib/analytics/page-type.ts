@@ -15,6 +15,7 @@ export function pageTypeFor(path: string, userType: string = "visitor"): PageTyp
     privacy: "privacy",
     terms: "terms",
     submit: "submit",
+    add: "submit",
     settings: "settings",
     admin: "admin",
     k: "kol",

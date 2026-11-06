@@ -1,4 +1,4 @@
-# MRT Time — v1.1 spec
+# MRT Time — v1.2 spec
 
 Public web app (PWA) that predicts Singapore MRT train arrivals from timed platform-board readings (no operator live-arrival feed exists), plans door-to-door commutes with transfers, and doubles as a **real marketing/analytics practice product** (GA4, GTM, ads tracking, KOL tracking, SEO, experiments).
 
@@ -10,7 +10,7 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - All third-party IDs/keys via env; every integration is a no-op when its env is unset. `pnpm build` passes with no env.
 
 ## 2. Users & access
-- **Public (no login):** station boards, journey planner, landing/SEO pages, accuracy page, submit a board reading (crowdsourced, rate-limited).
+- **Public (no login):** station boards, journey planner, landing/SEO pages, accuracy page, add a board reading (inline on station pages or `/add`; crowdsourced, rate-limited).
 - **Signed-in owner (`ALLOWED_EMAILS`):** personal commute (saved places + journeys), one-tap logging, admin dashboard, moderation of public readings, campaign/KOL/experiment management.
 - **Analysts (`ANALYST_EMAILS`, optional):** read-only access to `/admin` analytics (for a marketing collaborator). Unset by default.
 
@@ -28,7 +28,10 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
   1. **Same-day anchor:** an approved reading today at that platform within 90 min → project by its headway (high confidence).
   2. Else **time-band headway model:** LTA-published fallback peak (weekday 07:00–09:00, 17:00–19:00) 2–3 min, off-peak 5–7 min, overridden by the median observed headway for that line/direction/time band once ≥2 readings exist (observed so far: TEL 6 min, EWL 4–6 min off-peak).
   3. **Historical clock-time repeat** (anchor from another day at a similar time-of-day/day-type, as in v0 `lib/predict.js`) is used ONLY outside unstable windows. **Weekday 09:15–10:30 is marked unstable** (owner observed clock times don't repeat day to day): show "every ~N min" + wait range, never exact clock times from other days. The unstable-window list is data, editable in admin.
-  - Output: next arrivals (clock + countdown) or a range, headway, confidence (high/medium/low) + plain reason ("from a reading 12 min ago" / "typical gap at this hour").
+  - Output: next arrivals (clock + countdown) or a range, headway, confidence (high/medium/low) + plain reason ("from a reading 12 min ago" / "typical gap at this hour"). The planner and owner Home use this output as is.
+- **Station board view-model** (`src/lib/predict/board-view.ts`, pure): station pages **always show clock times, never an interval only**. Each direction card shows the next 3 arrivals as SGT `HH:MM` with a live countdown ("10:24 · in 2 min"):
+  - **Exact** (reading today ≤ 90 min, incl. the visitor's own just-saved reading): solid times, chip "From the board", reason "From a board reading N min ago".
+  - **Estimate** (another day's reading at a similar time, or the typical gap at this hour): "≈10:24 ±N" with an "Estimate" chip and the plain reason ("Typical gap ~5 min, no board reading yet today"). Gap-only estimates sit on a steady grid from the start of service so they count down between renders. ± = 1 min (historical; 2 if low confidence), ⌈gap/2⌉ (typical gap), and in unstable windows max(3, ⌈gap/2⌉+1) — times are still shown, with the wider band.
 - **Accuracy tracking:** when the owner logs `board` at a platform, store the prediction that was shown/computed for that moment; compute hit rate (predicted train within ±1 min) per line/station/time band. Public `/accuracy` page.
 
 ## 5. Journeys (planner)
@@ -46,9 +49,15 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
   - **Next departures** (list mode, 6 rows): leave at → board leg 1 (line chip + clock) → transfer catch (tight / likely / wait ~N) → board leg 2 → arrive, with a live countdown to the first leave-by. In unstable / headway-only windows rows show ranges, never exact clocks.
   - Recomputed (`GET /api/commute`, owner only) on journey change, immediately after each logging tap (the rest of the trip starts from the platform, the end of the current ride, or where you got off; taps older than 90 min are ignored), right after a board reading is saved (same-day anchor), every minute, and when the first leave-by passes.
 - Home screen big buttons in context: "At platform", "Boarded", "Got off", "Tap out", "Arrived" — journey-aware (knows the next expected step), timestamp at tap, undo within 10 s.
-- Board reading entry: station + direction preselected from journey context, number pad for minutes (up to 3 trains), save. Optional photo is NOT stored (photos live in Notion).
+- Board reading entry on Home: the same one-tap entry as station pages (below), preset to the next journey platform/direction, with "At a different station?" → `/add`. Optional photo is NOT stored (photos live in Notion).
 - `POST /api/ingest` with bearer `INGEST_TOKEN` so Hermes can post readings/events it extracts from photos sent in chat.
-- Public submission form (station/direction/minutes, no login): rate limit per device+IP hash (e.g. 10/hour), status `pending` unless consistent (±2 min) with an approved reading/prediction in the same 30-min window → auto-approve; else owner moderates in admin.
+### 6a. Simplified reading flow (commuter's words: which way, in how many minutes, when I saw it)
+- **One-tap entry**, inline under every direction on station pages, on owner Home and in `/add`: "Board says: next train to Pasir Ris in [ ] min, then [ ] min" (+ optional third train). Large number chips 0–15 fill the next empty box (tap a filled box to clear it) plus a free number input. Time seen = now automatically; "seen at HH:MM · change" opens a time picker (default now, at most 30 min back). Save → 10 s undo toast (`DELETE /api/readings?id=`, own reading only, ≤ 2 min old).
+- **No jargon** anywhere in this flow: no "headway", "source", "status", "observation", "direction key" or "dest code"; destinations are named as on the platform board (`Direction.board`, e.g. "Pasir Ris", "Joo Koon / Tuas Link", TEL "Woodlands North" / "Bayshore"). Early-ending trains (`alsoBoard`, e.g. "Springleaf") are grouped under their direction automatically.
+- **`/add`** (one screen, one-handed at 393×852): 1 station (default: last used on this device, else the owner's next journey platform, else a searchable list with EN/中文 names and codes) → 2 big direction buttons named like the board (platform chip when the station has several lines) → 3 the same minute chips. `/submit` permanently redirects to `/add`.
+- The form posts exactly `{ station, direction, minutes[], seenAt }` to `POST /api/readings` (device id, consented visitors only, in the `x-device-id` header). Minutes are sorted ascending.
+- After saving, the card switches to exact times immediately: the reading is kept on the device for 90 min (`mrt_my_readings`) and overrides that direction's view until the server has an anchor at least as fresh; the board is re-fetched at once so other visitors get the anchor when it is approved.
+- Public submissions (no login): rate limit per device+IP hash (10/hour), `seenAt` at most 30 min back, status `pending` unless consistent (±2 min) with an approved reading/prediction in the same 30-min window → auto-approve; else owner moderates in admin. The owner's readings auto-approve.
 
 ## 7. LTA DataMall (free, `LTA_ACCOUNT_KEY`)
 - Train Service Alerts → banner on affected lines/stations; Platform Crowd Density Real Time for the stations above → crowd chip per platform. Cache 1–2 min. Graceful hide when key unset/401.
@@ -80,10 +89,19 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 ### 8g. Microsoft Clarity
 - `NEXT_PUBLIC_CLARITY_ID`, loads only with analytics consent, masking strict.
 ### 8h. Admin dashboard `/admin`
-- Overview: DAU/WAU/MAU, new vs returning, sessions, avg engaged time, top pages/stations/journeys, referrers/UTM, country/city, device/standalone split, time-of-day × weekday heatmap, retention cohorts (weekly), funnel (landing → prediction_view → planner_query → install), Web Vitals p75, prediction accuracy, API latency p50/p95, public submissions queue, campaigns, KOLs, experiments, feedback/NPS. Date range picker. CSV export per table. All server-side SQL aggregates (indexed), no external chart lib heavier than necessary (SVG charts ok).
+- Overview: DAU/WAU/MAU, new vs returning, sessions, avg engaged time, top pages/stations/journeys, referrers/UTM, country/city, device/standalone split, time-of-day × weekday heatmap, retention cohorts (weekly), funnel (landing → prediction_view → planner_query → install), Web Vitals p75, prediction accuracy, API latency p50/p95, public submissions queue, campaigns, KOLs, experiments, ads, feedback/NPS. Date range picker. CSV export per table. All server-side SQL aggregates (indexed), no external chart lib heavier than necessary (SVG charts ok).
+### 8i. Ads inside the app (publisher side) — see `docs/ads-setup.md`
+- Same slots for two systems. Placements: `station` (below the board), `station_sponsored` (dedicated "Sponsored" block, house only), `planner` (below results), `landing` (between sections). **Never** on owner Home, admin, `/add`, settings or sign-in. Fixed 300 px reserved height (no CLS), loaded only when near the viewport.
+- **Google AdSense** behind `NEXT_PUBLIC_ADSENSE_CLIENT` (`ca-pub-…`) + `NEXT_PUBLIC_ADSENSE_SLOT_STATION|_PLANNER|_LANDING`: script only after consent (Consent Mode v2 basic: nothing on deny/undecided); marketing consent → personalised, analytics-only → `requestNonPersonalizedAds=1`; never for signed-in owner/analyst (invalid-traffic policy). Unfilled after 2.5 s → house ad. `/ads.txt` serves `google.com, pub-<id>, DIRECT, f08c47fec0942fa0` when set, else 404.
+- **House ads** (Meta Audience Network doesn't serve mobile web, so Meta-style units are simulated): tables `ad_campaign` (slug, name, advertiser, objective awareness/traffic/conversion, status, start/end, daily budget SGD, bid model CPM|CPC, bid, targeting jsonb: stations, lines, languages, time bands, devices), `ad_creative` (format `meta_feed|meta_story|google_display|google_search_text`, headline, primary text, description, image URL or uploaded data URL ≤ 200 KB, CTA, destination, A/B weight, status, seed `ref`), `ad_event` (impression|viewable|click, creative, campaign, format, placement, device id with consent, session, internal flag).
+- Serving (`src/lib/ads/select.ts`): eligible by status/dates/contextual targeting → pacing (stop when simulated spend ≥ daily budget, today SGT, non-internal) → frequency cap 3 impressions per campaign per session → campaign weighted by effective CPM (CPC × assumed 1 % CTR) → creative by A/B weight.
+- Rendering: each format drawn like its platform's native unit, labelled "Sponsored"/"Ad"/"廣告". Tracking: impression on render, viewable at ≥ 50 % for ≥ 1 s, click via `/api/ads/click?c=&p=` (logs, then 302 with `utm_source=mrt_house&utm_medium=<format>&utm_campaign=<slug>&utm_content=<creative id>`); GA4 `ad_impression`/`ad_viewable`/`ad_click` (`creative_id, format, placement, campaign`) through `track()`.
+- Admin → Ads: campaign + creative forms with live preview per format; report by campaign/creative/format/placement (impressions, viewable %, clicks, CTR, simulated spend, effective CPM/CPC, post-click conversions in the same session: planner_query, app_installed, newsletter_signup), CSV export.
+- Seed `scripts/seed-ads.ts` (`pnpm ads:seed`, idempotent, run by Hermes): "Install MRT Time" (meta_story + google_display), "Join the newsletter" (meta_feed), "Read the accuracy report" (google_search_text). Self-promotional only.
+- Sandbox: synthetic `ad_impression`/`ad_viewable`/`ad_click` with per-format CTR (search > feed > story > display) and AdSense-like `ad_revenue` on 40 % of impressions.
 
 ## 9. Marketing surfaces
-- Landing `/` for visitors (owner sees personal commute home), `/station/[slug]` SEO pages (live board, exits, nearby, FAQ), `/accuracy`, `/media-kit`, `/about`, `/privacy`, `/terms`. Metadata, sitemap.xml, robots.txt, OG images (`next/og`), JSON-LD. Bilingual **EN / 繁體中文** (`/zh-Hant/...` or locale cookie; language as GA dimension); all UI strings via a dictionary.
+- Landing `/` for visitors (owner sees personal commute home), `/station/[slug]` SEO pages (live board with inline reading entry, exits, nearby, FAQ), `/add`, `/accuracy`, `/media-kit`, `/about`, `/privacy`, `/terms`. Metadata, sitemap.xml, robots.txt, OG images (`next/og`), JSON-LD. Bilingual **EN / 繁體中文** (`/zh-Hant/...` or locale cookie; language as GA dimension); all UI strings via a dictionary.
 - Share button (Web Share API) with UTM.
 
 ## 10. PWA & UX

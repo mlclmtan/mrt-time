@@ -24,6 +24,7 @@ describe("event taxonomy", () => {
         "log_reading", "log_trip_event", "submit_reading", "install_prompt_shown", "app_installed", "standalone_open",
         "share", "outbound_click", "alert_view", "crowd_view", "feedback_submit", "nps_submit", "newsletter_signup",
         "experiment_exposure", "kol_landing", "campaign_landing", "consent_update", "web_vital",
+        "ad_impression", "ad_viewable", "ad_click",
       ].sort(),
     );
   });
@@ -211,6 +212,33 @@ describe("practice sandbox", () => {
       }
     }
     expect(generateDay("2026-11-02")).toEqual(generateDay("2026-11-02")); // deterministic
+  });
+
+  it("generates ad impressions/viewables/clicks with per-format CTR and AdSense-like ad_revenue", () => {
+    const by: Record<string, { imp: number; click: number }> = {};
+    let revenue = 0;
+    for (const date of ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"])
+      for (const p of generateDay(date).payloads)
+        for (const e of p.events) {
+          if (!e.name.startsWith("ad_")) continue;
+          expect(e.params.data_source).toBe("synthetic");
+          const key = e.params.ad_source === "adsense" ? "adsense" : String(e.params.format);
+          by[key] ??= { imp: 0, click: 0 };
+          if (e.name === "ad_impression") {
+            by[key].imp++;
+            if (e.params.ad_source === "adsense") {
+              expect(e.params.ad_revenue).toBeGreaterThan(0);
+              expect(e.params.currency).toBe("SGD");
+              revenue += Number(e.params.ad_revenue);
+            } else expect(e.params.ad_revenue).toBeUndefined();
+          }
+          if (e.name === "ad_click") by[key].click++;
+        }
+    const ctr = (k: string) => by[k].click / by[k].imp;
+    expect(Object.keys(by).sort()).toEqual(["adsense", "google_display", "google_search_text", "meta_feed", "meta_story"]);
+    expect(ctr("google_search_text")).toBeGreaterThan(ctr("meta_feed"));
+    expect(ctr("meta_feed")).toBeGreaterThan(ctr("google_display"));
+    expect(revenue).toBeGreaterThan(0);
   });
 
   it("drops events older than the 72 h backdating limit", () => {

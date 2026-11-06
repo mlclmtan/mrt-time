@@ -1,12 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Users } from "lucide-react";
 import type { Board, BoardDirection, BoardPlatform } from "@/lib/server/board";
 import type { CrowdLevel, LineAlerts } from "@/lib/server/lta";
+import type { Observation } from "@/lib/predict/types";
+import { directionView, withLocalReading } from "@/lib/predict/board-view";
+import { myReadingFor, myReadings } from "@/lib/readings/entry";
 import { BUS_APP_URL } from "@/lib/push/disruptions";
-import { clock, confidenceClass, minsUntil, reasonText } from "@/lib/format";
+import { clock } from "@/lib/format";
+import { nowMs } from "@/lib/time";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
+import { DirectionTimes } from "./direction-times";
+import { QuickEntry } from "./quick-entry";
 
 type Payload = { board: Board | null; alerts: LineAlerts | null; crowd: Record<string, CrowdLevel> | null };
 const POLL_MS = 30_000;
@@ -16,7 +22,9 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
   const [data, setData] = useState<Payload>(initial);
   const [offlineAt, setOfflineAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => initial.board?.now ?? 0);
+  const [mine, setMine] = useState<Observation[]>([]);
   const key = `mrt_board_${slug}`;
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     let stopped = false;
@@ -40,9 +48,11 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
         } catch {}
       }
     };
+    loadRef.current = load;
     const tick = setInterval(() => setNow(Date.now()), 1000);
     const first = setTimeout(() => {
       setNow(Date.now());
+      setMine(myReadings(Date.now()));
       void load();
     }, 0);
     const poll = setInterval(() => document.visibilityState === "visible" && void load(), POLL_MS);
@@ -56,6 +66,14 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [slug, key]);
+
+  // Saved: show exact times at once (own reading), then re-fetch for everyone's view.
+  const onSaved = useCallback(() => {
+    const at = nowMs();
+    setNow(at);
+    setMine(myReadings(at));
+    void loadRef.current();
+  }, []);
 
   const board = data.board;
   if (!board) return <p className="text-muted">{t("board.loading")}</p>;
@@ -71,7 +89,7 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
       )}
       {alerts.length > 0 && data.alerts && <AlertBanner alerts={data.alerts} lines={[...new Set(alerts.map((a) => a.line))]} />}
       {board.platforms.map((p) => (
-        <PlatformCard key={p.code} platform={p} now={now || board.now} crowd={data.crowd?.[p.code]} />
+        <PlatformCard key={p.code} platform={p} now={now || board.now} crowd={data.crowd?.[p.code]} mine={mine} onSaved={onSaved} />
       ))}
       <p className="text-xs text-muted">{t("board.updated", { time: clock(board.now) })}</p>
     </section>
@@ -104,7 +122,19 @@ function AlertBanner({ alerts, lines }: { alerts: LineAlerts; lines: string[] })
   );
 }
 
-function PlatformCard({ platform, now, crowd }: { platform: BoardPlatform; now: number; crowd?: CrowdLevel }) {
+function PlatformCard({
+  platform,
+  now,
+  crowd,
+  mine,
+  onSaved,
+}: {
+  platform: BoardPlatform;
+  now: number;
+  crowd?: CrowdLevel;
+  mine: Observation[];
+  onSaved: () => void;
+}) {
   const { t, locale } = useI18n();
   const { track } = useAnalytics();
   const sent = useRef(false);
@@ -129,18 +159,31 @@ function PlatformCard({ platform, now, crowd }: { platform: BoardPlatform; now: 
       </header>
       <div className="divide-y divide-line">
         {platform.directions.map((d) => (
-          <DirectionRow key={d.key} platform={platform} direction={d} now={now} />
+          <DirectionRow key={d.key} platform={platform} direction={d} now={now} mine={myReadingFor(mine, platform.code, d.key)} onSaved={onSaved} />
         ))}
       </div>
     </article>
   );
 }
 
-function DirectionRow({ platform, direction, now }: { platform: BoardPlatform; direction: BoardDirection; now: number }) {
+function DirectionRow({
+  platform,
+  direction,
+  now,
+  mine,
+  onSaved,
+}: {
+  platform: BoardPlatform;
+  direction: BoardDirection;
+  now: number;
+  mine: Observation | null;
+  onSaved: () => void;
+}) {
   const { t, locale } = useI18n();
   const { track } = useAnalytics();
   const [voted, setVoted] = useState(false);
-  const p = direction.prediction;
+  const p = withLocalReading(direction.prediction, mine, { line: platform.line, direction: direction.key, station: platform.code, now });
+  const view = directionView(p, now, platform.line);
   const viewed = useRef(false);
   useEffect(() => {
     if (viewed.current) return;
@@ -148,51 +191,15 @@ function DirectionRow({ platform, direction, now }: { platform: BoardPlatform; d
     track("prediction_view", { station: platform.code, line: platform.line, direction: direction.key, confidence: p.confidence, basis: p.basis });
   }, [direction.key, p.basis, p.confidence, platform.code, platform.line, track]);
 
-  const upcoming = p.arrivals.filter((a) => a.at >= now - 30_000);
+  const destination = (direction.board ?? direction.label)[locale];
   return (
     <div className="px-4 py-3">
       <div className="flex items-baseline gap-2">
         <span className="text-xs text-muted">{t("board.towards")}</span>
-        <span className="font-semibold">{direction.label[locale]}</span>
+        <span className="font-semibold">{destination}</span>
       </div>
-      {p.kind === "closed" ? (
-        <p className="mt-2 text-muted">{t("board.notRunning")}</p>
-      ) : p.kind === "times" && upcoming.length ? (
-        <div className="mt-2 flex items-end gap-6">
-          <div>
-            <div className="text-[11px] tracking-wide text-muted uppercase">{t("board.next")}</div>
-            <div className="led text-5xl leading-none font-bold">
-              {minsUntil(upcoming[0].at, now)}
-              <span className="ml-1 text-lg">{t("unit.min")}</span>
-            </div>
-            <div className="tabular mt-1 text-xs text-muted">{clock(upcoming[0].at)}</div>
-          </div>
-          {upcoming.slice(1, 3).map((a) => (
-            <div key={a.at}>
-              <div className="text-[11px] tracking-wide text-muted uppercase">{t("board.then")}</div>
-              <div className="led text-2xl leading-none opacity-80">
-                {minsUntil(a.at, now)}
-                <span className="ml-1 text-sm">{t("unit.min")}</span>
-              </div>
-              <div className="tabular mt-1 text-xs text-muted">{clock(a.at)}</div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-2">
-          <div className="led text-3xl font-bold">{t("board.every", { n: p.headwayMin })}</div>
-          <div className="tabular text-sm text-muted">
-            {t("board.wait", { n: p.waitMin.max })} · {t("board.window", { from: clock(now), to: clock(now + p.waitMin.max * 60_000) })}
-          </div>
-        </div>
-      )}
-      {p.kind !== "closed" && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className={`chip ${confidenceClass(p.confidence)}`}>{t(`conf.${p.confidence}`)}</span>
-          <span className="text-muted">{reasonText(t, p.reason)}</span>
-        </div>
-      )}
-      {p.kind === "times" && (
+      <DirectionTimes view={view} now={now} />
+      {view.state === "exact" && (
         <div className="mt-2 flex gap-2 text-xs">
           {voted ? (
             <span className="text-go">{t("board.thanks")}</span>
@@ -212,6 +219,9 @@ function DirectionRow({ platform, direction, now }: { platform: BoardPlatform; d
             ))
           )}
         </div>
+      )}
+      {view.state !== "closed" && (
+        <QuickEntry station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
       )}
     </div>
   );

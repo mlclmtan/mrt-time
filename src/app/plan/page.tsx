@@ -10,6 +10,7 @@ import { schedulingAvailable } from "@/lib/push/config";
 import { JOURNEY_CHOICE_COOKIE, autoJourneyKey, journeyEnds, parseJourneyChoice } from "@/lib/journey/commute";
 import { nowMs, sgtClock } from "@/lib/time";
 import { Planner } from "@/components/plan/planner";
+import { AdSlot } from "@/components/ads/ad-slot";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { locale, t } = await getT();
@@ -41,6 +42,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
         defaultTime={sgtClock(now)}
         remindersAvailable={owner && schedulingAvailable()}
       />
+      <AdSlot placement="planner" />
     </div>
   );
 }

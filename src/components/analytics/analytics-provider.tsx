@@ -174,8 +174,17 @@ export function AnalyticsProvider({
   );
 }
 
+/** Outside the provider (isolated renders/tests) tracking is a no-op and consent is denied. */
+const NO_ANALYTICS: Ctx = {
+  consent: { analytics: false, marketing: false, decided: false },
+  setConsent: () => {},
+  track: () => {},
+  locale: "en",
+  userType: "visitor",
+  experiments: {},
+  deviceId: () => null,
+};
+
 export function useAnalytics(): Ctx {
-  const ctx = useContext(AnalyticsContext);
-  if (!ctx) throw new Error("useAnalytics outside AnalyticsProvider");
-  return ctx;
+  return useContext(AnalyticsContext) ?? NO_ANALYTICS;
 }

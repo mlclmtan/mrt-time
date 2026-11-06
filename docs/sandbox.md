@@ -97,7 +97,8 @@ Geo (`user_location`): Singapore `SG-01` 88, Kuala Lumpur `MY-14` 5, Taipei `TW-
 4. New users: `experiment_exposure` `landing_hero`, `control` or `countdown` 50/50.
 5. Returning installed users: `standalone_open`.
 6. 75 % of visits: `station_view` + `prediction_view` (`confidence` high/medium/low), then `planner_query` with probability 0.38 × 1.2 (countdown) × 1.4 (commuter). New installers then get `install_prompt_shown` + `app_installed`.
-7. Extras in those visits: `share` 5 %, `newsletter_signup` 2 %, `feedback_submit` 3 % (rating 3–5).
+7. Ads on 85 % of those visits (one station-page slot): 40 % AdSense-like fills (`ad_source=adsense`, `format=google_display`, `campaign=adsense`, `ad_revenue` = eCPM S$1.50–4.00 / 1000 with `currency=SGD`) and 60 % house creatives with per-format viewability and CTR — `google_search_text` 3.5 % CTR, `meta_feed` 1.2 %, `meta_story` 0.8 %, `google_display` 0.4 % — each as `ad_impression` → `ad_viewable` → `ad_click` with `creative_id`, `format`, `placement`, `campaign`. Practise: CTR and viewability by format, revenue per 1,000 sessions, and whether ad clicks lead to `planner_query`.
+8. Extras in those visits: `share` 5 %, `newsletter_signup` 2 %, `feedback_submit` 3 % (rating 3–5).
 
 A/B effect built in: `countdown` lifts planner rate ×1.2 and install rate ×1.15, so the experiment should show a winner given enough days.
 

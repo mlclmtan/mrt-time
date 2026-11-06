@@ -15,6 +15,10 @@ export type Direction = {
   /** +1 when running towards higher `order`, −1 towards lower. */
   sense: 1 | -1;
   label: { en: string; "zh-Hant": string };
+  /** The destination exactly as the platform board shows it. */
+  board: { en: string; "zh-Hant": string };
+  /** Trains that end early this way (still this direction), e.g. Springleaf. */
+  alsoBoard?: { en: string; "zh-Hant": string }[];
 };
 
 export type Line = {
@@ -69,6 +73,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "EW1",
         sense: -1,
         label: { en: "To Pasir Ris", "zh-Hant": "往巴西立" },
+        board: { en: "Pasir Ris", "zh-Hant": "巴西立" },
       },
       TO_WEST: {
         key: "TO_WEST",
@@ -76,6 +81,7 @@ export const LINES: Record<LineCode, Line> = {
         alsoTerminals: ["EW29"],
         sense: 1,
         label: { en: "To Joo Koon / Tuas Link", "zh-Hant": "往裕群／大士連路" },
+        board: { en: "Joo Koon / Tuas Link", "zh-Hant": "裕群／大士連路" },
       },
     },
   },
@@ -91,6 +97,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "TE29",
         sense: 1,
         label: { en: "To Bayshore", "zh-Hant": "往碧灣" },
+        board: { en: "Bayshore", "zh-Hant": "碧灣" },
       },
       TO_NORTH: {
         key: "TO_NORTH",
@@ -98,6 +105,8 @@ export const LINES: Record<LineCode, Line> = {
         alsoTerminals: ["TE4"],
         sense: -1,
         label: { en: "To Woodlands North", "zh-Hant": "往兀蘭北" },
+        board: { en: "Woodlands North", "zh-Hant": "兀蘭北" },
+        alsoBoard: [{ en: "Springleaf", "zh-Hant": "春葉" }],
       },
     },
   },
@@ -113,12 +122,14 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "NE1",
         sense: -1,
         label: { en: "To HarbourFront", "zh-Hant": "往港灣" },
+        board: { en: "HarbourFront", "zh-Hant": "港灣" },
       },
       TO_PUNGGOL: {
         key: "TO_PUNGGOL",
         terminal: "NE18",
         sense: 1,
         label: { en: "To Punggol Coast", "zh-Hant": "往榜鵝海岸" },
+        board: { en: "Punggol Coast", "zh-Hant": "榜鵝海岸" },
       },
     },
   },

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { journeySteps, nextStepIndex, type StepKind } from "@/lib/journey/steps";
 import type { Leg } from "@/lib/journey/plan";
@@ -13,11 +14,12 @@ import {
   type JourneyChoice,
 } from "@/lib/journey/commute";
 import { clock } from "@/lib/format";
+import { getDirection, getPlatform, stationForCode } from "@/lib/network";
 import { MINUTE, nowMs } from "@/lib/time";
 import { randomId } from "@/lib/analytics/client";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
-import { ReadingForm } from "../reading-form";
+import { QuickEntry } from "../board/quick-entry";
 import { Planner } from "../plan/planner";
 import { VersionFooter } from "../version-footer";
 import { CommutePanel } from "./commute-panel";
@@ -54,7 +56,7 @@ export function OwnerHome({
   remindersAvailable: boolean;
   defaultTime: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale, href } = useI18n();
   const { track } = useAnalytics();
   const [key, setKey] = useState(initialKey ?? journeys[0]?.key ?? "");
   const manual = useRef<JourneyChoice | null>(initialChoice);
@@ -180,7 +182,10 @@ export function OwnerHome({
     await fetch(`/api/trip-events?clientId=${id}`, { method: "DELETE" }).catch(() => null);
   }
 
-  const readingStep = steps.slice(nextIdx).find((s) => s.kind === "at_platform" || s.kind === "board");
+  const readingStep = steps.slice(nextIdx).find((s) => s.kind === "at_platform" || s.kind === "board") ?? steps.find((s) => s.kind === "at_platform");
+  const entryPlatform = readingStep?.station ? getPlatform(readingStep.station) : undefined;
+  const entryDirection = entryPlatform && readingStep?.direction ? getDirection(entryPlatform.line, readingStep.direction) : undefined;
+  const entry = entryPlatform && entryDirection ? { station: entryPlatform.code, line: entryPlatform.line, direction: entryDirection.key, board: entryDirection.board } : null;
   const ends = journey ? journeyEnds(journey.legs) : undefined;
   const shownView = view && view.journeyKey === key ? view : null;
 
@@ -226,12 +231,21 @@ export function OwnerHome({
       <VersionFooter />
       <section>
         <h2 className="mb-2 font-semibold">{t("owner.reading")}</h2>
-        <ReadingForm
-          key={`${readingStep?.station}-${readingStep?.direction}`}
-          defaultStation={readingStep?.station ?? "EW17"}
-          defaultDirection={readingStep?.direction}
-          onSaved={() => setRefresh((n) => n + 1)}
-        />
+        {entry && <p className="text-sm text-muted">{stationForCode(entry.station)?.name[locale]} · {entry.station}</p>}
+        {entry ? (
+          <QuickEntry
+            key={`${entry.station}-${entry.direction}`}
+            station={entry.station}
+            line={entry.line}
+            direction={entry.direction}
+            destination={entry.board[locale]}
+            onSaved={() => setRefresh((n) => n + 1)}
+            onUndone={() => setRefresh((n) => n + 1)}
+          />
+        ) : null}
+        <Link href={href("/add")} className="mt-2 inline-block text-sm text-accent underline">
+          {t("owner.otherStation")}
+        </Link>
       </section>
       <section>
         <h2 className="mb-2 font-semibold">{t("plan.title")}</h2>

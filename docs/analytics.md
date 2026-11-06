@@ -68,9 +68,9 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `planner_query` | `from_station`, `to_station` (slug), `mode` (`depart\|leave_by\|list`), `transfers` (0–2), `journey_type` | Successful `/api/plan` response the visitor asked for (`planner.tsx`): submit or an input change (debounced). The automatic plan on page load is **not** counted. |
 | `prediction_view` | `station` (code), `line`, `direction`, `confidence` (`high\|medium\|low`), `basis` (`same_day\|historical\|band\|closed\|none`) | Each direction row on a live board, once per mount (`live-board.tsx`) |
 | `prediction_feedback` | `station` (code), `line`, `direction`, `verdict` (`accurate\|early\|late`) | Tap on accurate/early/late under a prediction (`live-board.tsx`) |
-| `log_reading` | `station` (code), `line`, `direction`, `trains` (1–3) | Reading saved successfully (`reading-form.tsx`) |
+| `log_reading` | `station` (code), `line`, `direction`, `trains` (1–3) | Reading saved successfully (`board/quick-entry.tsx`: station cards, owner Home, `/add`) |
 | `log_trip_event` | `kind` (`door, lift_lobby, station_entrance, tap_in, at_platform, board, alight, tap_out, desk, arrived`), `station?` (code), `line?` | Owner taps a trip-step button (`owner-home.tsx`) |
-| `submit_reading` | `station` (code), `line`, `direction`, `status` (`approved\|pending\|rate_limited`) | Reading form submit result, incl. HTTP 429 (`reading-form.tsx`) |
+| `submit_reading` | `station` (code), `line`, `direction`, `status` (`approved\|pending\|rate_limited`) | Quick-entry save result, incl. HTTP 429 (`board/quick-entry.tsx`) |
 | `install_prompt_shown` | `platform` (`ios\|android\|desktop\|other`) | `beforeinstallprompt` fires (Android/desktop Chromium only) (`install-prompt.tsx`) |
 | `app_installed` | `platform` | Browser `appinstalled` event (`analytics-provider.tsx`). iOS Safari does not fire it; use `standalone_open` / `standalone=yes` for iOS. |
 | `standalone_open` | — | First page load per browser session in standalone display mode |
@@ -85,6 +85,9 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `kol_landing` | `kol_handle` (slug), `code_used` (bool, `?code=1` from `/r/CODE`) | `/k/[handle]` mount (`KolTracker`) |
 | `campaign_landing` | `campaign`, `source`, `medium` (slugs) | Route change whose URL carries `utm_source`, `utm_medium` and `utm_campaign`, except `utm_medium=kol` |
 | `consent_update` | `analytics`, `marketing` (bool) | Consent banner/Settings save (only if something is granted, see above) |
+| `ad_impression` | `creative_id` (int), `format` (`meta_feed\|meta_story\|google_display\|google_search_text`), `placement` (`station\|station_sponsored\|planner\|landing`), `campaign` (slug) | A house ad rendered in a slot (`ads/ad-slot.tsx`). AdSense fills are reported by AdSense, not here. |
+| `ad_viewable` | same as `ad_impression` | The house ad was ≥ 50 % visible for ≥ 1 s (IntersectionObserver) |
+| `ad_click` | same as `ad_impression` | Tap on a house ad (opens `/api/ads/click`, which logs and 302s with UTM) |
 | `web_vital` | `metric` (`LCP\|INP\|CLS\|TTFB\|FCP`), `value` (0–600000), `rating` (`good\|needs-improvement\|poor`) | `web-vitals` callbacks for LCP, INP, CLS, TTFB. FCP is allowed by the schema but not reported. |
 
 Note the `station` prop holds a **slug** (`outram-park`) on `page_view`/`station_view`/`planner_query` and a **platform code** (`TE17`) on board events. Filter by event name when reporting on the GA4 `station` dimension.

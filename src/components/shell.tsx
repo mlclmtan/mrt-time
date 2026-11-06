@@ -13,7 +13,7 @@ export async function SiteHeader({ role }: { role: Role | null }) {
     ["/plan", t("nav.plan")],
     ["/#stations", t("nav.stations")],
     ["/accuracy", t("nav.accuracy")],
-    ["/submit", t("nav.submit")],
+    ["/add", t("nav.submit")],
   ];
   if (role === "owner") links.push(["/me", t("nav.me")]);
   if (role) links.push(["/admin", t("nav.admin")]);

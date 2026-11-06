@@ -10,15 +10,16 @@ Live at <https://mrt.91208274.xyz> · v1.0.0 · spec: [SPEC.md](SPEC.md)
 
 | Area | What you get |
 |---|---|
-| Boards | `/station/[slug]` live board per platform direction: countdowns + clock times, or "every ~N min" ranges, with confidence (high/medium/low) and a plain reason. Crowd chips and service alerts from LTA DataMall; link to the bus app on disruption. Offline: last snapshot. |
+| Boards | `/station/[slug]` live board per platform direction: always the next 3 trains as SGT clock times with a live countdown — exact from a board reading today, otherwise "≈HH:MM ±N" estimates with an "Estimate" chip and a plain reason (wider ± in unstable windows, never an interval on its own). Under each direction a one-tap entry: "Board says: next train to Pasir Ris in [ ] min, then [ ] min" (chips 0–15, time seen = now, 10 s undo); the card turns exact at once. Crowd chips and service alerts from LTA DataMall; link to the bus app on disruption. Offline: last snapshot. |
 | Prediction | `src/lib/predict/`: same-day anchor (≤ 90 min, high confidence) → time-band headway (LTA 2–3 / 5–7 min, overridden by the observed median after ≥ 2 readings) → historical clock-time repeat (v0 port) only outside unstable windows (weekday 09:15–10:30 by default, editable in admin). |
 | Planner | `/plan` and the owner home: walk / ride / transfer legs, catchable train per ride, transfer catch (tight / likely / wait ~N), best/worst case, **leave at**, **arrive by** and **next 6** modes, ≤ 2 transfers between any supported stations, rain hint (data.gov.sg) pointing to the sheltered variant. |
 | Owner home | Journey auto-picked by time (before 14:00 SGT Home→Office, after Office→Home; a manual pick holds 2 h). **Leave now →** card (arrive ~HH:MM, best–worst, per-leg confidence + reason, best-door tip) and **Next departures** (6 rows: leave → board leg 1 → transfer catch → board leg 2 → arrive, ranges in unstable windows) with a live "leave in m:ss" countdown. Recomputes from the remaining legs right after each tap and after a board reading. |
-| Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware one-tap logging (At platform → Boarded → Got off → Tap out → Arrived) with 10 s undo, board-reading number pad, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
-| Crowd-sourcing | `/submit` public readings: rate limit 10/hour per device + daily IP hash; auto-approved when within ±2 min of an approved reading (or same-day prediction) in the same 30-min window, else moderated in `/admin/submissions`. Hermes posts readings/events to `/api/ingest`. |
+| Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware one-tap logging (At platform → Boarded → Got off → Tap out → Arrived) with 10 s undo, one-tap board entry for the next journey platform, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
+| Crowd-sourcing | `/add` (one screen: station → which way, named like the board → minutes; `/submit` redirects) and the inline station-page entry post `{ station, direction, minutes[], seenAt }`; public readings: rate limit 10/hour per device + daily IP hash; auto-approved when within ±2 min of an approved reading (or same-day prediction) in the same 30-min window, else moderated in `/admin/submissions`. Hermes posts readings/events to `/api/ingest`. |
 | Accuracy | Every owner "board" stores what was predicted for that moment; `/accuracy` shows hit rate (±1 min) by line, station and time band. |
 | Analytics | First-party `event_log` in Neon (zod-validated, no PII), Consent Mode v2 basic, GTM/gtag mirror, Meta Pixel + CAPI dedup, Clarity, Web Vitals, server-side anonymous page hits, first/last-touch UTM, internal-traffic flag, practice GA4 sandbox with synthetic data + cost CSV. |
 | Marketing | KOLs (`/k/[handle]`, `/r/[code]`), campaign builder with QR (SVG/PNG), experiments (landing hero A/B), feedback, NPS, newsletter (Resend double opt-in), `/media-kit`, EN / 繁體中文 (`/zh-Hant/...`), sitemap, robots, OG images, JSON-LD. |
+| Ads | Publisher side: Google AdSense (`NEXT_PUBLIC_ADSENSE_CLIENT` + slot ids, consent-gated, non-personalised without marketing consent, `/ads.txt`) and in-house "house ads" simulating Meta feed/story and Google display/search units, with targeting, pacing, frequency cap, A/B weights, impression/viewable/click tracking, GA4 `ad_*` events and an Ads report in admin. See [docs/ads-setup.md](docs/ads-setup.md). |
 | Admin | `/admin`: DAU/WAU/MAU, new vs returning, sessions, engaged time, top pages/stations/journeys, referrers/UTM, geo, device/standalone, hour × weekday heatmap, weekly retention, funnel, Web Vitals p75, API latency p50/p95, accuracy, submissions queue, campaigns, KOLs, experiments, feedback/NPS, sandbox runs, CSV export. Analysts (`ANALYST_EMAILS`) get read-only analytics. |
 | PWA | Installable standalone app, safe areas, `100dvh`, version tag `v<pkg> · <sha> · <SGT build time>` on Home and Settings, update banner via `/api/version`. |
 
@@ -45,6 +46,7 @@ Useful scripts:
 | `pnpm db:generate` | Generate a Drizzle migration from `src/lib/db/schema.ts` into `drizzle/`. |
 | `pnpm db:migrate` | Apply migrations (needs `DATABASE_URL`). |
 | `pnpm db:seed` | Upsert owner data from `private/seed.json` (`--dry-run` validates only). |
+| `pnpm ads:seed` | Upsert the three self-promotional house campaigns (idempotent; run by Hermes). |
 | `pnpm sandbox:seed` | Backfill the practice GA4 property (last 3 days, MP 72 h limit). |
 | `pnpm sandbox:cost --days 14 --out cost.csv` | Synthetic GA4 cost-import CSV. |
 | `pnpm qstash:schedules` | Create the 5-minute disruption-check schedule. |
@@ -80,6 +82,7 @@ docs/                  setup guides (below)
 - [docs/sandbox.md](docs/sandbox.md) — practice property, Measurement Protocol limits, cost import
 - [docs/kol-playbook.md](docs/kol-playbook.md) — creating KOLs, links, codes, dashboard
 - [docs/ingest-api.md](docs/ingest-api.md) — Hermes ingest endpoint
+- [docs/ads-setup.md](docs/ads-setup.md) — AdSense, ads.txt, consent, house campaigns, GA4 ad events
 
 ## Deploying (Vercel)
 

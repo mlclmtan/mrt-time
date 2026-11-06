@@ -83,6 +83,38 @@ export function localName(value: { en: string; "zh-Hant": string }, locale: Loca
   return value[locale] || value.en;
 }
 
+export type DirectionChoice = {
+  /** Platform code the reading is for, e.g. "TE17". */
+  station: string;
+  line: LineCode;
+  color: string;
+  direction: string;
+  board: Direction["board"];
+  /** Early-ending trains ("Springleaf") count as the same direction. */
+  alsoBoard: Direction["board"][];
+};
+
+/** Every "which way" button for a station, as the platform boards name them. */
+export function directionChoices(stationSlug: string): DirectionChoice[] {
+  const station = getStation(stationSlug);
+  if (!station) return [];
+  return station.codes.flatMap((code) => {
+    const line = LINES[PLATFORMS[code].line];
+    return Object.values(line.directions)
+      .filter((d) => d.terminal !== code)
+      .map((d) => ({ station: code, line: line.code, color: line.color, direction: d.key, board: d.board, alsoBoard: d.alsoBoard ?? [] }));
+  });
+}
+
+/** Station search over English, Chinese and platform codes. */
+export function searchStations(query: string): Station[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return STATIONS;
+  return STATIONS.filter(
+    (s) => s.name.en.toLowerCase().includes(q) || s.name["zh-Hant"].includes(query.trim()) || s.codes.some((c) => c.toLowerCase() === q) || s.slug.includes(q),
+  );
+}
+
 /* ---------- Public routing: at most two transfers ---------- */
 
 export type RouteRide = {

@@ -5,6 +5,7 @@ import { ExposureTracker } from "./trackers";
 import { NewsletterForm } from "./voc/newsletter-form";
 import { ShareButton } from "./share-button";
 import { VersionFooter } from "./version-footer";
+import { AdSlot } from "./ads/ad-slot";
 
 export function StationGrid({ locale, t }: { locale: Locale; t: T }) {
   return (
@@ -52,6 +53,7 @@ export function Landing({ locale, t, variant }: { locale: Locale; t: T; variant:
         <VersionFooter />
       </section>
       <StationGrid locale={locale} t={t} />
+      <AdSlot placement="landing" />
       <section className="panel space-y-2 p-5">
         <h2 className="text-xl font-semibold">{t("landing.how.title")}</h2>
         <ol className="list-decimal space-y-1 pl-5 text-muted">
@@ -60,7 +62,7 @@ export function Landing({ locale, t, variant }: { locale: Locale; t: T; variant:
           <li>{t("landing.how.3")}</li>
         </ol>
       </section>
-      <section className="panel space-y-3 p-5">
+      <section id="newsletter" className="panel scroll-mt-24 space-y-3 p-5">
         <h2 className="font-semibold">{t("landing.newsletter")}</h2>
         <NewsletterForm />
       </section>

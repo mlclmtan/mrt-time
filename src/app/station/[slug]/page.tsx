@@ -11,6 +11,7 @@ import { LiveBoard } from "@/components/board/live-board";
 import { JsonLd } from "@/components/json-ld";
 import { ShareButton } from "@/components/share-button";
 import { StationTracker } from "@/components/trackers";
+import { AdSlot } from "@/components/ads/ad-slot";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -58,6 +59,7 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
         <ShareButton path={localePath(locale, `/station/${slug}`)} title={`${name} · MRT Time`} contentType="station" />
       </header>
       <LiveBoard slug={slug} initial={{ board, alerts, crowd }} />
+      <AdSlot placement="station" station={slug} />
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="panel p-4">
           <h2 className="font-semibold">{t("station.exits")}</h2>
@@ -75,6 +77,10 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
             ))}
           </ul>
         </div>
+      </section>
+      <section aria-label={t("ads.sponsored")} className="space-y-2">
+        <h2 className="text-xs tracking-wide text-muted uppercase">{t("ads.sponsored")}</h2>
+        <AdSlot placement="station_sponsored" station={slug} />
       </section>
       <section className="panel space-y-3 p-4">
         <h2 className="font-semibold">{t("station.faq")}</h2>

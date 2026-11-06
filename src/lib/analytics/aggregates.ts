@@ -233,6 +233,7 @@ export const EXPORTS = {
   prediction_check: sql`select id, line, station, direction, band, boarded_at as ts, predicted_at, kind, basis, confidence, error_min, hit from prediction_check`,
   api_metric: sql`select id, ts, route, ms, status from api_metric`,
   campaign: sql`select id, name, source, medium, campaign, content, term, campaign_id, url, created_at as ts from campaign`,
+  ad_event: sql`select id, ts, type, creative_id, campaign_id, format, placement, device_id, session_id, internal from ad_event`,
 } as const;
 export type ExportName = keyof typeof EXPORTS;
 

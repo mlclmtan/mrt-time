@@ -23,7 +23,7 @@ export default async function SettingsPage() {
         <h2 className="font-semibold">{t("lang.label")}</h2>
         <LanguageSwitch />
       </section>
-      <section className="panel space-y-1 p-4">
+      <section id="install" className="panel scroll-mt-24 space-y-1 p-4">
         <h2 className="font-semibold">{t("settings.install")}</h2>
         <p className="text-sm text-muted">{t("settings.installIos")}</p>
       </section>
