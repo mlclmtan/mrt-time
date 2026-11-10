@@ -5,17 +5,35 @@ import { getT } from "@/lib/i18n/server";
 import { ownerJourneys, ownerPlaces } from "@/lib/server/journeys";
 import { legRideMin } from "@/lib/journey/plan";
 import { saveLegMinutes } from "./actions";
+import Link from "next/link";
+import { dbConfigured } from "@/lib/db";
+import { todaysEvents } from "@/lib/server/trips";
+import { localePath } from "@/lib/i18n";
+import { MeTimeline } from "@/components/owner/me-timeline";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function MePage() {
   const session = await getSession();
   if (session?.user.role !== "owner") redirect("/sign-in");
-  const { t } = await getT();
-  const [journeys, places] = await Promise.all([ownerJourneys(session.user.id), ownerPlaces(session.user.id).catch(() => [])]);
+  const { t, locale } = await getT();
+  const [journeys, places, today] = await Promise.all([
+    ownerJourneys(session.user.id),
+    ownerPlaces(session.user.id).catch(() => []),
+    dbConfigured() ? todaysEvents(session.user.id).catch(() => []) : Promise.resolve([]),
+  ]);
   return (
     <div className="space-y-6 pt-6">
       <h1 className="text-3xl font-bold">{t("nav.me")}</h1>
+      <section className="panel space-y-3 p-4">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 className="font-semibold">{t("timeline.title", { n: today.length })}</h2>
+          <Link href={localePath(locale, "/me/stats")} className="ml-auto text-sm text-accent underline">
+            {t("stats.link")}
+          </Link>
+        </div>
+        <MeTimeline initial={today} />
+      </section>
       <section className="grid gap-3 sm:grid-cols-2">
         {places.map((p) => (
           <div key={p.id} className="panel p-4 text-sm">

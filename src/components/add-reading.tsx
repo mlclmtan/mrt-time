@@ -5,6 +5,8 @@ import { directionChoices, getStation, PLATFORMS, searchStations } from "@/lib/n
 import { lastUsedStation } from "@/lib/readings/entry";
 import { useI18n } from "./i18n";
 import { QuickEntry } from "./board/quick-entry";
+import { BoardingButtons } from "./boarding/boarding-buttons";
+import { GeoSuggest } from "./geo/geo-suggest";
 
 /**
  * Add a reading on one screen: 1 station → 2 which way → 3 the minutes on
@@ -44,6 +46,18 @@ export function AddReading({ defaultStation, defaultDirection }: { defaultStatio
       {/* 1 · Station */}
       <section className="panel p-4">
         <h2 className="text-sm font-semibold text-muted">{t("add.station")}</h2>
+        <div className="mt-2">
+          <GeoSuggest
+            surface="add"
+            current={slug}
+            onPick={(s) => {
+              setSlug(s);
+              setChoice(null);
+              setPicking(false);
+              setQuery("");
+            }}
+          />
+        </div>
         {station && !picking ? (
           <div className="mt-2 flex items-center gap-3">
             <span className="text-2xl font-bold">{station.name[locale]}</span>
@@ -134,6 +148,21 @@ export function AddReading({ defaultStation, defaultDirection }: { defaultStatio
               {t("add.seeTimes")}
             </Link>
           )}
+        </section>
+      )}
+
+      {/* Or: I boarded / Got off */}
+      {picked && (
+        <section className="panel p-4">
+          <h2 className="text-sm font-semibold text-muted">{t("add.orBoarded")}</h2>
+          <BoardingButtons
+            key={`b-${picked.station}-${picked.direction}`}
+            station={picked.station}
+            line={picked.line}
+            direction={picked.direction}
+            destination={picked.board[locale]}
+            onSaved={() => setSavedTo(slug)}
+          />
         </section>
       )}
     </div>

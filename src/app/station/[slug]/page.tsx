@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getT } from "@/lib/i18n/server";
 import { localePath } from "@/lib/i18n";
-import { getStation, LINES, PLATFORMS, STATIONS } from "@/lib/network";
+import { getStation, LINES, PLATFORMS, STATIONS, stationsByDistance } from "@/lib/network";
 import { pageMetadata, stationJsonLd } from "@/lib/seo";
 import { stationBoard } from "@/lib/server/board";
 import { crowdForStations, lineAlerts } from "@/lib/server/lta";
@@ -60,6 +60,7 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
       </header>
       <LiveBoard slug={slug} initial={{ board, alerts, crowd }} />
       <AdSlot placement="station" station={slug} />
+      {station.exits.length + station.nearby.length > 0 && (
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="panel p-4">
           <h2 className="font-semibold">{t("station.exits")}</h2>
@@ -78,6 +79,7 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
           </ul>
         </div>
       </section>
+      )}
       <section aria-label={t("ads.sponsored")} className="space-y-2">
         <h2 className="text-xs tracking-wide text-muted uppercase">{t("ads.sponsored")}</h2>
         <AdSlot placement="station_sponsored" station={slug} />
@@ -92,15 +94,23 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
         ))}
       </section>
       <nav className="text-sm">
-        <h2 className="mb-2 font-semibold">{t("station.all")}</h2>
+        <h2 className="mb-2 font-semibold">{t("stations.nearby")}</h2>
         <ul className="flex flex-wrap gap-2">
-          {STATIONS.filter((s) => s.slug !== slug).map((s) => (
-            <li key={s.slug}>
-              <Link className="rounded-full border border-line px-3 py-1" href={localePath(locale, `/station/${s.slug}`)}>
-                {s.name[locale]}
-              </Link>
-            </li>
-          ))}
+          {stationsByDistance(station.lat, station.lng)
+            .filter((s) => s.station.slug !== slug)
+            .slice(0, 10)
+            .map(({ station: s }) => (
+              <li key={s.slug}>
+                <Link className="rounded-full border border-line px-3 py-1" href={localePath(locale, `/station/${s.slug}`)}>
+                  {s.name[locale]}
+                </Link>
+              </li>
+            ))}
+          <li>
+            <Link className="rounded-full border border-led px-3 py-1 text-led" href={localePath(locale, "/stations")}>
+              {t("stations.all", { n: STATIONS.length })}
+            </Link>
+          </li>
         </ul>
       </nav>
     </article>

@@ -3,23 +3,23 @@ import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, dbConfigured } from "../db";
 import { journey, place } from "../db/schema";
-import { findRoutes, getPlatform, getStation, stationForCode } from "../network";
+import { DIRECTION_KEY_RE, LINE_CODE_LIST, PLATFORM_CODE_RE, findRoutes, getPlatform, getStation, stationForCode } from "../network";
 import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan } from "../journey/plan";
 import { isRainy, predictionSource } from "../journey/source";
 import { commuteView, type CommuteProgress, type CommuteView } from "../journey/commute";
-import { getUnstableWindows, loadObservations } from "./observations";
-import { twoHourForecast } from "./weather";
+import { predictionData } from "./board";
+import { forecastFor, twoHourForecast } from "./weather";
 import { affectedLines, lineAlerts } from "./lta";
 
-const code = z.string().regex(/^[A-Z]{2}\d{1,2}$/);
+const code = z.string().regex(PLATFORM_CODE_RE);
 export const legSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("walk"), min: z.number().min(0).max(120), label: z.string().max(60).optional(), tip: z.string().max(200).optional() }),
   z.object({
     kind: z.literal("ride"),
-    line: z.enum(["EWL", "TEL", "NEL"]),
+    line: z.enum(LINE_CODE_LIST),
     from: code,
     to: code,
-    direction: z.string().regex(/^TO_[A-Z]{2,20}$/),
+    direction: z.string().regex(DIRECTION_KEY_RE),
     rideMin: z.number().min(0).max(120).optional(),
     tip: z.string().max(200).optional(),
   }),
@@ -80,18 +80,18 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
   const rides = ridesOf(legs);
   const codes = [...new Set(rides.map((r) => r.from))];
   const lines = [...new Set(rides.map((r) => r.line))];
-  const [observations, windows, forecast, alerts] = await Promise.all([
-    loadObservations(codes, lines, at),
-    getUnstableWindows(at),
+  const [data, forecast, alerts] = await Promise.all([
+    predictionData(codes, lines, at),
     twoHourForecast(),
     lineAlerts().catch(() => null),
   ]);
-  const source = predictionSource(observations, windows);
+  const source = predictionSource(data.observations, data.settings.windows, { sightings: data.sightings, windowsCustom: data.settings.custom });
   const plans =
     mode === "list" ? planList(legs, at, source, 6) : mode === "leave_by" ? [planLeaveBy(legs, at, source)] : [planForward(legs, at, source)];
   const firstStation = rides[0] ? stationForCode(rides[0].from) : undefined;
-  const area = firstStation?.weatherArea;
-  const text = area && forecast ? forecast[area] : undefined;
+  const hit = firstStation && forecast ? forecastFor(firstStation, forecast) : null;
+  const area = hit?.area;
+  const text = hit?.forecast;
   const affected = affectedLines(alerts);
   return {
     legs,
@@ -108,11 +108,11 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
  */
 export async function commuteFor(journey: OwnerJourney, progress: CommuteProgress, now: number): Promise<CommuteView> {
   const rides = ridesOf(journey.legs.slice(progress.fromLeg));
-  const [observations, windows] = await Promise.all([
-    loadObservations([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => []),
-    getUnstableWindows(now),
-  ]);
-  return commuteView(journey.key, journey.legs, progress, predictionSource(observations, windows), now);
+  const data = await predictionData([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => null);
+  const source = data
+    ? predictionSource(data.observations, data.settings.windows, { sightings: data.sightings, windowsCustom: data.settings.custom })
+    : predictionSource([], undefined);
+  return commuteView(journey.key, journey.legs, progress, source, now);
 }
 
 /** Legs for a public route between two stations (≤ 2 transfers). */

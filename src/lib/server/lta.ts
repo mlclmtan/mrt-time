@@ -83,7 +83,8 @@ export async function lineAlerts(fetchImpl?: typeof fetch): Promise<LineAlerts |
   return body ? parseAlerts(body) : null;
 }
 
-const CROWD_LINE: Record<string, string> = { EW: "EWL", TE: "TEL", NE: "NEL" };
+/** LTA PCDRealTime TrainLine codes by platform-code prefix. */
+const CROWD_LINE: Record<string, string> = { NS: "NSL", EW: "EWL", CG: "CGL", NE: "NEL", CC: "CCL", CE: "CEL", DT: "DTL", TE: "TEL" };
 
 export async function crowdForStations(codes: string[], fetchImpl?: typeof fetch): Promise<Record<string, CrowdLevel> | null> {
   if (!process.env.LTA_ACCOUNT_KEY?.trim()) return null;

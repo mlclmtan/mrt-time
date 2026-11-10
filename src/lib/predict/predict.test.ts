@@ -40,11 +40,14 @@ describe("same-day anchor", () => {
     near(p.arrivals[1].at, at(MON, "11:07"));
   });
 
-  it("ignores readings older than 90 minutes, pending readings and other platforms", () => {
+  it("ignores readings older than 90 minutes, pending readings and the other direction / line", () => {
+    // v2: a reading at another station of the same line and direction now
+    // counts (the same trains pass here) — see sightings.test.ts.
     const observations = [
       reading(MON, "08:00", [1, 4]),
       reading(MON, "10:50", [1, 4], { status: "pending" }),
-      reading(MON, "10:50", [1, 4], { station: "EW15" }),
+      reading(MON, "10:50", [1, 4], { station: "EW15", direction: "TO_WEST" }),
+      reading(MON, "10:50", [1, 4], { station: "TE17", line: "TEL", direction: "TO_BAYSHORE" }),
     ];
     const p = predict({ ...base, now: at(MON, "11:00"), observations });
     expect(p.basis).not.toBe("same_day");

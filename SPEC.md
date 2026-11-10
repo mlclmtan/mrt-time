@@ -1,4 +1,4 @@
-# MRT Time — v1.2 spec
+# MRT Time — v2.0 spec
 
 Public web app (PWA) that predicts Singapore MRT train arrivals from timed platform-board readings (no operator live-arrival feed exists), plans door-to-door commutes with transfers, and doubles as a **real marketing/analytics practice product** (GA4, GTM, ads tracking, KOL tracking, SEO, experiments).
 
@@ -15,10 +15,10 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - **Analysts (`ANALYST_EMAILS`, optional):** read-only access to `/admin` analytics (for a marketing collaborator). Unset by default.
 
 ## 3. Network data (static, in repo)
-- Lines/stations needed now: EWL (EW15 Tanjong Pagar, EW16 Outram Park, EW17 Tiong Bahru, EW18 Redhill + terminals EW1 Pasir Ris, EW29 Joo Koon, EW33 Tuas Link), TEL (TE14 Orchard, TE17 Outram Park, TE18 Maxwell, TE19 Shenton Way + terminals TE1 Woodlands North, TE29 Bayshore), NEL (NE3 Outram Park + NE1 HarbourFront, NE18 Punggol Coast). Station order/adjacency per line so ride times and "which direction" are computable. Easy to extend to every station later (data file structure must allow full network).
-- Line colours (official), service hours (approx 05:30–00:30), directions per line keyed by terminal (e.g. EWL `TO_EAST`→Pasir Ris, `TO_WEST`→Joo Koon/Tuas Link; TEL `TO_BAYSHORE`, `TO_NORTH`; NEL `TO_HARBOURFRONT`, `TO_PUNGGOL`).
-- Inter-station ride minutes (observed: EW17↔EW16 3, TE17↔TE19 3, EW15→EW17 5) with a default of 2 min/stop.
-- Interchange transfer minutes (estimates, platform to platform): Outram Park EW16↔TE17 **2** (observed 1–2, median 2), NE3↔EW16 **3**, NE3↔TE17 **4**. Default for an interchange without a figure: 3. Never above 4 unless a transfer is known to be long.
+- **Every MRT line and station** (v2.0, see §18): NSL, EWL (incl. the Changi Airport branch CG), NEL, CCL (incl. Stage 6), DTL, TEL. Data in `src/lib/network/` (`data.ts` lines/directions/details, `stations-list.ts` codes/names/coordinates); sources and licences in `docs/data-sources.md`.
+- Line colours (official), service hours (approx 05:30–00:30). A direction is keyed by the destination the platform board shows and lists the **path(s)** its trains run (platform codes in running order ending at the terminal); branches are separate directions (EWL `TO_CHANGI_AIRPORT` / `TO_TANAH_MERAH`). Keys match `^TO_[A-Z][A-Z_]+$` (e.g. `TO_EAST`, `TO_MARINA_SOUTH_PIER`).
+- Ride minutes per hop: observed values (EW17→EW16 3, EW15→EW17 5, TE17→TE19 3, TE17→TE2 Woodlands 37; a longer observed ride is spread evenly over its stops without a figure of their own), else 2 min a stop incl. dwell.
+- Interchange transfer minutes (platform to platform): Outram Park EW16↔TE17 **2** (observed 0–2; a 0-minute change is real), NE3↔EW16 3, NE3↔TE17 4. Every other interchange is an estimate: 3, or 4 where the walk is known to be long. Branch change at Tanah Merah: 3 (estimate). Never above 4 unless a transfer is known to be long.
 
 ## 4. Observations & prediction engine (`src/lib/predict/`, pure, tested)
 - **Observation** = board reading: station, line, direction, destination, capturedAt (SGT), minutes shown for next / next-next / optional 3rd train, source (owner | public | hermes), status (approved | pending | rejected).
@@ -27,12 +27,12 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - Prediction for (station, direction, now):
   1. **Same-day anchor:** an approved reading today at that platform within 90 min → project by its headway (high confidence).
   2. Else **time-band headway model:** LTA-published fallback peak (weekday 07:00–09:00, 17:00–19:00) 2–3 min, off-peak 5–7 min, overridden by the median observed headway for that line/direction/time band once ≥2 readings exist (observed so far: TEL 6 min, EWL 4–6 min off-peak).
-  3. **Historical clock-time repeat** (anchor from another day at a similar time-of-day/day-type, as in v0 `lib/predict.js`) is used ONLY outside unstable windows. **Weekday 09:15–10:30 is marked unstable** (owner observed clock times don't repeat day to day): show "every ~N min" + wait range, never exact clock times from other days. The unstable-window list is data, editable in admin.
+  3. **Historical clock-time repeat** (anchor from another day at a similar time-of-day/day-type, as in v0 `lib/predict.js`) is used ONLY outside unstable windows, and since v2.0 only while the learned model (§16) has too few days to decide. **Weekday 09:15–10:30 is marked unstable** (owner observed clock times don't repeat day to day): show "every ~N min" + wait range, never exact clock times from other days. The unstable-window list is data, editable in admin.
   - Output: next arrivals (clock + countdown) or a range, headway, confidence (high/medium/low) + plain reason ("from a reading 12 min ago" / "typical gap at this hour"). The planner and owner Home use this output as is.
 - **Station board view-model** (`src/lib/predict/board-view.ts`, pure): station pages **always show clock times, never an interval only**. Each direction card shows the next 3 arrivals as SGT `HH:MM` with a live countdown ("10:24 · in 2 min"):
   - **Exact** (reading today ≤ 90 min, incl. the visitor's own just-saved reading): solid times, chip "From the board", reason "From a board reading N min ago".
   - **Estimate** (another day's reading at a similar time, or the typical gap at this hour): "≈10:24 ±N" with an "Estimate" chip and the plain reason ("Typical gap ~5 min, no board reading yet today"). Gap-only estimates sit on a steady grid from the start of service so they count down between renders. ± = 1 min (historical; 2 if low confidence), ⌈gap/2⌉ (typical gap), and in unstable windows max(3, ⌈gap/2⌉+1) — times are still shown, with the wider band.
-- **Accuracy tracking:** when the owner logs `board` at a platform, store the prediction that was shown/computed for that moment; compute hit rate (predicted train within ±1 min) per line/station/time band. Public `/accuracy` page.
+- **Accuracy tracking:** when the owner logs `board` at a platform, store the prediction that was shown/computed for that moment (`prediction_check`). Since v2.0 the public `/accuracy` page uses train sightings as ground truth (§16).
 
 ## 5. Journeys (planner)
 - Journey = ordered legs: walk (fixed min), ride (line, from, to, direction), transfer (fixed min at an interchange). Fixed leg minutes per saved journey are editable.
@@ -48,7 +48,7 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
   - **Leave now →** card: arrive ~HH:MM with best–worst, per ride leg the board clock (or range), confidence + reason ("from a board reading 12 min ago" / "typical gap at this hour · every ~6 min"), and the best-door tip from journey data.
   - **Next departures** (list mode, 6 rows): leave at → board leg 1 (line chip + clock) → transfer catch (tight / likely / wait ~N) → board leg 2 → arrive, with a live countdown to the first leave-by. In unstable / headway-only windows rows show ranges, never exact clocks.
   - Recomputed (`GET /api/commute`, owner only) on journey change, immediately after each logging tap (the rest of the trip starts from the platform, the end of the current ride, or where you got off; taps older than 90 min are ignored), right after a board reading is saved (same-day anchor), every minute, and when the first leave-by passes.
-- Home screen big buttons in context: "At platform", "Boarded", "Got off", "Tap out", "Arrived" — journey-aware (knows the next expected step), timestamp at tap, undo within 10 s.
+- Home screen buttons in context — big **I boarded** / **Got off** plus Leaving (home door / desk), At platform, Tap out, Arrived (desk / home door) — journey-aware (knows the next expected step), time = the tap unless moved with the time chips (§13), undo within 10 s.
 - Board reading entry on Home: the same one-tap entry as station pages (below), preset to the next journey platform/direction, with "At a different station?" → `/add`. Optional photo is NOT stored (photos live in Notion).
 - `POST /api/ingest` with bearer `INGEST_TOKEN` so Hermes can post readings/events it extracts from photos sent in chat.
 ### 6a. Simplified reading flow (commuter's words: which way, in how many minutes, when I saw it)
@@ -117,5 +117,52 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 ## 11. Data seeding
 - `scripts/seed.ts` reads `private/seed.json` (gitignored, owner data: observations, trips, profile) and upserts into DB for the owner email. Repo ships only synthetic fixtures for tests.
 
-## 12. Backlog (next version)
-- (empty)
+## 12. v2.0 overview
+The owner's words: *"Should let me input time of boarding the train, this is the best: e.g. just now 10:14 I boarded Tiong Bahru → Pasir Ris, and 10:17 boarded Outram → Bayshore."* A boarding (or getting off) time is an exact sighting of a real train at that platform — stronger evidence than a board countdown. v2.0 builds on that: §13–§19. Plain wording everywhere (never "headway", "anchor", "observation", "kind" in the UI).
+
+## 13. "I boarded" / "Got off" with an editable time (owner + public)
+- Big **I boarded** / **Got off** buttons on owner Home, under every direction on station pages, and on `/add` (after picking the direction).
+- Time chips: **Now · −1 · −2 · −5 min · Pick time** (SGT time picker; a picked time later than now means yesterday; at most 12 h back). Default Now; resets to Now after each tap. Shows "at HH:MM".
+- Station + direction: preselected from the current journey step (owner Home) or the station card; "You're at Tiong Bahru?" GPS chip (§17); one tap to change (platform picker: search EN/中文/code → direction buttons named like the board).
+- Owner: stored as a trip event (`board` / `alight`, existing `trip_event` table) **and** a train sighting linked to it. Public: `POST /api/sightings` `{ station, direction, kind: boarded|alighted, at }` → sighting with the board-reading rules: rate limit 10/hour per device + daily IP hash (shared bucket), approved when within ±2 min of a train already known at that platform (approved readings/sightings, here or propagated, recorded within 30 min), else pending → **Admin → Submissions** ("Boardings to review").
+- Undo toast 10 s (`DELETE /api/sightings?id=` own device/network ≤ 2 min, or `?clientId=` for the owner; owner Home uses `DELETE /api/trip-events?clientId=`). After saving, the station board re-fetches and the owner's departures recompute at once.
+
+## 14. Today's trip timeline (owner)
+- On Home (collapsible, open once something is logged) and `/me`: today's taps in order — time, step, station, line chip, direction (board name).
+- Between taps, the minutes **waited** (At platform → Boarded), **on the train** (Boarded → Got off), **changing trains** (Got off → Boarded/At platform at the same station; 0 min is real), **walking** (everything else); gaps > 3 h are separate trips. Day totals on top.
+- Edit a time (same chips/picker), delete (confirm), **add a step I missed** (step, platform + direction when relevant, time). `GET/POST/PATCH/DELETE /api/trip-events` (owner only). The linked sighting follows every change (`train_sighting.trip_event_id`, unique, `ON DELETE CASCADE`); the accuracy check of a moved boarding is recomputed.
+
+## 15. Train sightings + propagation along the line
+- **Train sighting** = `{ platform, line, direction, at, kind: board_reading | boarded | alighted, source: owner | public | hermes, status }`. Boardings/getting off are stored in the additive table `train_sighting` (migration `0002_train_sightings`); board readings imply sightings (`capturedAt + minutes`) derived on the fly from `observation` (existing readings keep working unchanged).
+- `/api/ingest` `board` / `alight` trip events create sightings (`source = hermes`). `scripts/backfill-sightings.ts` (`pnpm sightings:backfill`, idempotent) creates them for trip events logged before v2.0.
+- **Propagation:** a sighting at station X (direction D, time t) is the same train at every other stop of D's path at t ± the cumulative ride minutes (per-hop times, §3). Spread: exact up to 2 stops away, then ±1 min per 4 further stops. Stops at the terminal; a board reading whose destination is an early terminal (Springleaf) stops there. Where a direction's paths split or merge (Circle Line at Promenade) the train is only placed where every path agrees.
+- Same train seen twice (within 1 min or its spread) counts once, keeping the closest sighting.
+- Predictions use propagated sightings as same-day anchors: the 10:14 Tiong Bahru `TO_EAST` boarding gives Outram Park 10:17, Tanjong Pagar 10:19. Reasons: "A rider got on or off a train here N min ago" / "From a train seen at Tiong Bahru N min ago"; a far sighting shows as "≈HH:MM ±N".
+
+## 16. Predictor v2 + "Trains seen today"
+- Order: (1) same-day trains known at the platform (readings here, sightings here or propagated; recorded ≤ 90 min ago, train ≤ 60 min ahead; gaps filled by the usual gap) → (2) learned band → (3) v1 rules while there are too few days (v0 clock repeat outside unstable windows, else a range by the usual gap).
+- **Learning** per platform/direction, day type (weekday / Saturday / Sunday & public holiday — `PUBLIC_HOLIDAYS` data) and 30-min band, from all known trains (spread ≤ 1 min) on earlier days: the usual gap (median; gaps spanning several trains folded back) and whether clock times **repeat**: the phase of the trains within the gap is compared with the previous day that has data; ≤ 1 min across ≥ 3 days → "repeats" (project the learned clock times, "Trains came at the same times on N recent days"), else "drifts" (range). This replaces the hand-set unstable window as the default; **admin-edited windows still force ranges** (admin override).
+- Station page: **Trains seen today** per direction (newest first, ≤ 12): time + how we know (someone got on/off here · shown on this board · seen at another station, with ± when estimated).
+- `/accuracy` uses sightings as ground truth: for every approved boarding, replay the prediction from 2 min before using only what was known then (never the boarding itself), score the nearest predicted train (±1 min = hit); by line, time band and station, with usual minutes off and how many were only a range.
+
+## 17. GPS nearest station
+- Browser geolocation, asked on first use with a plain explanation ("It stays on this phone: never saved, never sent"). Coordinates are used once on the device against `STATIONS` coordinates and dropped; only the choice ("use my location") is remembered (`localStorage mrt_geo`). If location was already allowed, the suggestion appears quietly.
+- "You're at Tiong Bahru?" chip on owner Home (platform picker), `/add` (station step) and wherever the platform picker appears; **Near me** sort on `/stations`. Works without permission (journey step / last used / search).
+- Analytics: `geo_suggest_shown` / `geo_suggest_accepted` with the station slug only.
+
+## 18. Every MRT station (public)
+- 146 open stations (Nov 2026) with codes, English and Traditional Chinese names, coordinates, running order, terminals/directions and interchange walks (§3). Unopened numbers are skipped (NS6, NE2, CC18, TE10, TE21; DT36/37 and TE30/31 open late Dec 2026).
+- Circle Line after Stage 6: Marina Bay CC33 / Bayfront CC34; modelled as Dhoby Ghaut ↔ Prince Edward Road (via HarbourFront) plus Prince Edward Road → Marina Bay → Bayfront → Promenade (board destinations of the loop trains to be confirmed — estimate, see `docs/data-sources.md`).
+- Station pages, `/stations` (by line, search, Near me), sitemap, planner routing (≤ 2 changes, incl. branch changes at Tanah Merah / Promenade / Prince Edward Road), board entry and sightings work for every station. v1 slugs/URLs unchanged. Stations without a hand-set forecast area use the nearest data.gov.sg forecast area.
+- Sources: Wikidata (CC0) for coordinates and Chinese labels; LTA station codes (facts); a few coordinates entered by hand. `cheeaun/sgraildata` was not used (no licence).
+
+## 19. Commute stats (owner, `/me/stats`, linked from Home and `/me`)
+- From trip events only: door → desk and desk → door per trip (only when both ends are logged — never invented), waits per platform, change times at interchanges (Outram Park first), ride times per leg, week-by-week trend, by weekday, **best time to leave** (lowest median door → desk by 10-min leave slot with ≥ 3 trips, else "Not enough trips yet").
+- Hand-written SVG charts (no chart library); empty states in plain words. `stats_view` event (`trips` count only).
+
+## 20. Analytics additions (v2.0)
+`boarded_logged`, `alighted_logged` (`station, line, direction, minutes_back, user_type, status?`), `timeline_edit` (`action, kind`), `stats_view` (`trips`), `geo_suggest_shown` / `geo_suggest_accepted` (`station` slug, `surface`). No coordinates, no free text. See `docs/analytics.md`.
+
+## 21. Backlog (next version)
+- iPhone Shortcut logging (owner declined for now).
+- Cross-border JB trips (owner declined for now).

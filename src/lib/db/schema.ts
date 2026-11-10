@@ -118,6 +118,39 @@ export const tripEvent = pgTable(
   ],
 );
 
+/**
+ * A real train seen at a platform: someone boarded or got off it (owner taps,
+ * Hermes, or public "I boarded" / "Got off"). Board readings imply sightings
+ * too, but those are derived from `observation` on the fly, not stored here.
+ * Owner/Hermes sightings link to their trip event (edits and deletes follow).
+ */
+export const trainSighting = pgTable(
+  "train_sighting",
+  {
+    id: serial("id").primaryKey(),
+    station: text("station").notNull(), // platform code, e.g. EW17
+    line: text("line").notNull(),
+    direction: text("direction").notNull(),
+    at: ts("at").notNull(), // when the train was at the platform
+    kind: text("kind").notNull(), // boarded | alighted | board_reading
+    source: text("source").notNull(), // owner | public | hermes
+    status: text("status").notNull().default("pending"), // approved | pending | rejected
+    destination: text("destination"),
+    tripEventId: integer("trip_event_id").references(() => tripEvent.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    deviceId: text("device_id"),
+    ipHash: text("ip_hash"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    reviewedAt: ts("reviewed_at"),
+  },
+  (t) => [
+    index("train_sighting_line_idx").on(t.line, t.direction, t.at),
+    index("train_sighting_platform_idx").on(t.station, t.line, t.direction, t.at),
+    index("train_sighting_status_idx").on(t.status, t.createdAt),
+    uniqueIndex("train_sighting_trip_event_idx").on(t.tripEventId),
+  ],
+);
+
 /** The prediction shown/computed when the owner boarded, for accuracy. */
 export const predictionCheck = pgTable(
   "prediction_check",

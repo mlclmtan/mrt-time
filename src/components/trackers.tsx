@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import type { LineCode } from "@/lib/network/data";
 import { useAnalytics } from "./analytics/analytics-provider";
 
 /** experiment_exposure once per mount. */
@@ -27,7 +28,7 @@ export function KolTracker({ handle, codeUsed }: { handle: string; codeUsed: boo
 }
 
 /** station_view once per mount. */
-export function StationTracker({ station, line }: { station: string; line?: "EWL" | "TEL" | "NEL" }) {
+export function StationTracker({ station, line }: { station: string; line?: LineCode }) {
   const { track, consent } = useAnalytics();
   const sent = useRef(false);
   useEffect(() => {

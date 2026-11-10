@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { getDb } from "../db";
 import { observation } from "../db/schema";
-import { getPlatform, isValidDirection } from "../network";
+import { DIRECTION_KEY_RE, PLATFORM_CODE_RE, getPlatform, isValidDirection } from "../network";
 import { autoApprovalStatus, CONSISTENCY_WINDOW_MIN, PUBLIC_READING_LIMIT, rateLimitKey, type RateLimiter } from "../predict/readings";
 import type { ReadingSource, ReadingStatus } from "../predict";
 import { MINUTE } from "../time";
@@ -11,8 +11,8 @@ import { platformPrediction } from "./board";
 
 export const readingInput = z
   .strictObject({
-    station: z.string().regex(/^[A-Z]{2}\d{1,2}$/),
-    direction: z.string().regex(/^TO_[A-Z]{2,20}$/),
+    station: z.string().regex(PLATFORM_CODE_RE),
+    direction: z.string().regex(DIRECTION_KEY_RE),
     minutes: z.array(z.number().int().min(0).max(60)).min(1).max(3),
     capturedAt: z.string().datetime({ offset: true }).optional(),
     destination: z.string().max(40).optional(),

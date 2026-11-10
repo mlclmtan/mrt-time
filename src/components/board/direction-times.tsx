@@ -1,12 +1,19 @@
 "use client";
 import type { DirectionView, BoardReason } from "@/lib/predict/board-view";
 import type { T } from "@/lib/i18n";
+import { stationForCode } from "@/lib/network";
 import { useI18n } from "../i18n";
 
-export function boardReasonText(t: T, r: BoardReason): string {
+export function boardReasonText(t: T, r: BoardReason, locale: "en" | "zh-Hant" = "en"): string {
   switch (r.code) {
     case "reading_ago":
       return t("reason.reading_ago", { minutes: r.minutes });
+    case "boarded_ago":
+      return t("reason.boarded_ago", { minutes: r.minutes });
+    case "seen_elsewhere":
+      return t("reason.seen_elsewhere", { minutes: r.minutes, station: stationForCode(r.station)?.name[locale] ?? r.station });
+    case "repeats":
+      return t("reason.repeats", { days: r.days });
     case "historical_anchor":
       return t("boardReason.historical", { clock: r.clock });
     case "typical_gap":
@@ -22,7 +29,7 @@ export function boardReasonText(t: T, r: BoardReason): string {
  * the plain reason. Never an interval on its own.
  */
 export function DirectionTimes({ view, now }: { view: DirectionView; now: number }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (view.state === "closed") return <p className="mt-2 text-muted">{t("board.notRunning")}</p>;
   const est = view.state === "estimate";
   const approx = est ? "≈" : "";
@@ -58,7 +65,7 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
         <span className={`chip ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>{t(est ? "board.estimate" : "board.exact")}</span>
-        <span className="text-muted">{boardReasonText(t, view.reason)}</span>
+        <span className="text-muted">{boardReasonText(t, view.reason, locale)}</span>
       </div>
     </div>
   );

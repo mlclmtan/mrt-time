@@ -70,6 +70,12 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `prediction_feedback` | `station` (code), `line`, `direction`, `verdict` (`accurate\|early\|late`) | Tap on accurate/early/late under a prediction (`live-board.tsx`) |
 | `log_reading` | `station` (code), `line`, `direction`, `trains` (1–3) | Reading saved successfully (`board/quick-entry.tsx`: station cards, owner Home, `/add`) |
 | `log_trip_event` | `kind` (`door, lift_lobby, station_entrance, tap_in, at_platform, board, alight, tap_out, desk, arrived`), `station?` (code), `line?` | Owner taps a trip-step button (`owner-home.tsx`) |
+| `boarded_logged` | `station` (code), `line`, `direction`, `minutes_back` (0–720: how far the time was moved back; 0 = now), `user_type` (`owner\|visitor`), `status?` (`approved\|pending\|rate_limited`) | "I boarded" on owner Home, a station card or `/add` |
+| `alighted_logged` | same as `boarded_logged` | "Got off" |
+| `timeline_edit` | `action` (`edit_time\|delete\|add_missed`), `kind` (trip step) | Owner edits today's timeline (Home / `/me`) |
+| `stats_view` | `trips` (number of complete trips) | Owner opens `/me/stats` |
+| `geo_suggest_shown` | `station` (slug), `surface` (`home\|add\|boarding\|stations`) | "You're at Tiong Bahru?" chip shown, or the "Near me" list's nearest station. **Never coordinates**: location is used once on the device to pick a station and dropped. |
+| `geo_suggest_accepted` | same as `geo_suggest_shown` | The suggestion was tapped |
 | `submit_reading` | `station` (code), `line`, `direction`, `status` (`approved\|pending\|rate_limited`) | Quick-entry save result, incl. HTTP 429 (`board/quick-entry.tsx`) |
 | `install_prompt_shown` | `platform` (`ios\|android\|desktop\|other`) | `beforeinstallprompt` fires (Android/desktop Chromium only) (`install-prompt.tsx`) |
 | `app_installed` | `platform` | Browser `appinstalled` event (`analytics-provider.tsx`). iOS Safari does not fire it; use `standalone_open` / `standalone=yes` for iOS. |
@@ -157,6 +163,7 @@ With marketing consent only: `fbq('track'|'trackCustom', event, data, { eventID:
 ## Privacy guarantees
 
 - No PII and no free text ever leaves for GA4, Meta or Clarity: event schemas cannot carry it (enforced by test), routes/referrers drop query strings, UTM values are slugged.
+- Location never leaves the device: the nearest station is computed in the browser from the station list, coordinates are dropped right away and never stored or sent (only the station slug appears in `geo_suggest_*`). The only thing remembered is the choice to use location (`localStorage mrt_geo`).
 - Feedback text, NPS comments and newsletter emails are posted to `/api/feedback`, `/api/nps`, `/api/newsletter` and stored only in Neon (`feedback`, `nps_response`, `newsletter`). The analytics events for them carry only rating/category, score, or `double_opt_in`.
 - Newsletter rows store the consent timestamp (`consent_at`).
 - Meta CAPI receives only `client_user_agent`, `_fbp`, `_fbc`, the page URL (no query) and the mapped custom data. No IP, email or phone.

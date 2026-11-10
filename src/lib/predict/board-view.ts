@@ -19,6 +19,9 @@ const GRACE_MS = 30_000;
 export type BoardArrival = { at: number; clock: string; inMin: number };
 export type BoardReason =
   | { code: "reading_ago"; minutes: number }
+  | { code: "boarded_ago"; minutes: number }
+  | { code: "seen_elsewhere"; minutes: number; station: string }
+  | { code: "repeats"; days: number }
   | { code: "historical_anchor"; clock: string }
   | { code: "typical_gap"; headway: number }
   | { code: "unstable_gap"; headway: number };
@@ -77,12 +80,20 @@ export function directionView(p: Prediction, now: number, line?: string): Direct
   const base = { headwayMin, unstable: p.unstable };
   if (p.basis === "same_day") {
     const times = extend(p.arrivals.map((a) => a.at), headwayMin, now);
+    const minutes = p.anchorAt != null ? Math.max(0, Math.round((now - p.anchorAt) / MINUTE)) : Number(p.reason.params.minutes ?? 0);
+    const spread = p.spreadMin ?? 0;
+    const reason: BoardReason =
+      p.reason.code === "seen_elsewhere"
+        ? { code: "seen_elsewhere", minutes, station: String(p.reason.params.station ?? "") }
+        : p.reason.code === "boarded_ago"
+          ? { code: "boarded_ago", minutes }
+          : { code: "reading_ago", minutes };
     return {
       ...base,
-      state: "exact",
-      plusMinus: null,
+      state: spread > 0 ? "estimate" : "exact",
+      plusMinus: spread > 0 ? spread : null,
       arrivals: times.map(toArrival(now)),
-      reason: { code: "reading_ago", minutes: p.anchorAt != null ? Math.max(0, Math.round((now - p.anchorAt) / MINUTE)) : Number(p.reason.params.minutes ?? 0) },
+      reason,
     };
   }
   if (p.basis === "historical" && p.arrivals.length) {
@@ -92,7 +103,10 @@ export function directionView(p: Prediction, now: number, line?: string): Direct
       state: "estimate",
       plusMinus: estimateSpread(p),
       arrivals: times.map(toArrival(now)),
-      reason: { code: "historical_anchor", clock: String(p.reason.params.clock ?? "") },
+      reason:
+        p.reason.code === "repeats"
+          ? { code: "repeats", days: Number(p.reason.params.days ?? 0) }
+          : { code: "historical_anchor", clock: String(p.reason.params.clock ?? "") },
     };
   }
   const times = gridArrivals(headwayMin, now, line);

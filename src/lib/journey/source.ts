@@ -1,4 +1,4 @@
-import { predict, type Observation, type Prediction, type UnstableWindow } from "../predict";
+import { predict, type Observation, type Prediction, type TrainSighting, type UnstableWindow } from "../predict";
 import type { RideLeg, TrainSchedule, TrainSource } from "./plan";
 
 export function scheduleFromPrediction(p: Prediction): TrainSchedule {
@@ -11,6 +11,7 @@ export function scheduleFromPrediction(p: Prediction): TrainSchedule {
 export function predictionSource(
   observations: Observation[],
   unstableWindows?: UnstableWindow[],
+  extra: { sightings?: TrainSighting[]; windowsCustom?: boolean } = {},
 ): TrainSource {
   return (leg: RideLeg, around: number) =>
     scheduleFromPrediction(
@@ -21,6 +22,8 @@ export function predictionSource(
         now: around,
         observations,
         unstableWindows,
+        sightings: extra.sightings,
+        windowsCustom: extra.windowsCustom,
       }),
     );
 }

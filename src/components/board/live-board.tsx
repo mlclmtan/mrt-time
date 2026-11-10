@@ -9,10 +9,13 @@ import { myReadingFor, myReadings } from "@/lib/readings/entry";
 import { BUS_APP_URL } from "@/lib/push/disruptions";
 import { clock } from "@/lib/format";
 import { nowMs } from "@/lib/time";
+import type { LineCode } from "@/lib/network/data";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 import { DirectionTimes } from "./direction-times";
 import { QuickEntry } from "./quick-entry";
+import { SeenToday } from "./seen-today";
+import { BoardingButtons } from "../boarding/boarding-buttons";
 
 type Payload = { board: Board | null; alerts: LineAlerts | null; crowd: Record<string, CrowdLevel> | null };
 const POLL_MS = 30_000;
@@ -103,7 +106,7 @@ function AlertBanner({ alerts, lines }: { alerts: LineAlerts; lines: string[] })
   useEffect(() => {
     if (sent.current) return;
     sent.current = true;
-    for (const line of lines) track("alert_view", { line: line as "EWL", status: alerts.status });
+    for (const line of lines) track("alert_view", { line: line as LineCode, status: alerts.status });
   }, [alerts.status, lines, track]);
   return (
     <div role="alert" className="rounded-xl border border-bad/40 bg-bad/10 p-3 text-sm">
@@ -220,8 +223,12 @@ function DirectionRow({
           )}
         </div>
       )}
+      <SeenToday trains={direction.seenToday ?? []} />
       {view.state !== "closed" && (
-        <QuickEntry station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
+        <>
+          <QuickEntry station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
+          <BoardingButtons station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
+        </>
       )}
     </div>
   );

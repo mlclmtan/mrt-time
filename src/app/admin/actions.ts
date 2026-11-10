@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getSession } from "@/lib/auth/server";
 import { dbConfigured, getDb } from "@/lib/db";
-import { adCampaign, adCreative, appSetting, campaign, experiment, kol, observation } from "@/lib/db/schema";
+import { adCampaign, adCreative, appSetting, campaign, experiment, kol, observation, trainSighting } from "@/lib/db/schema";
 import { parseCampaignForm, parseCreativeForm } from "@/lib/ads/admin-input";
 import { clearAdCatalog } from "@/lib/server/ads";
 import { buildCampaignUrl, utmToken } from "@/lib/analytics/utm";
@@ -24,6 +24,16 @@ export async function moderateReading(formData: FormData) {
   const status = formData.get("status") === "approved" ? "approved" : "rejected";
   if (!Number.isInteger(id)) return;
   await getDb().update(observation).set({ status, reviewedAt: new Date() }).where(eq(observation.id, id));
+  revalidatePath("/admin/submissions");
+}
+
+/** Public "I boarded" / "Got off" that didn't match known trains. */
+export async function moderateSighting(formData: FormData) {
+  await owner();
+  const id = Number(formData.get("id"));
+  const status = formData.get("status") === "approved" ? "approved" : "rejected";
+  if (!Number.isInteger(id)) return;
+  await getDb().update(trainSighting).set({ status, reviewedAt: new Date() }).where(eq(trainSighting.id, id));
   revalidatePath("/admin/submissions");
 }
 

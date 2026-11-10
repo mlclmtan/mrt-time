@@ -5,11 +5,12 @@
  */
 import { z } from "zod";
 import { AD_FORMATS, AD_PLACEMENTS } from "../ads/formats";
+import { DIRECTION_KEY_RE, LINE_CODE_LIST, PLATFORM_CODE_RE } from "../network/data";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,47}$/);
-const code = z.string().regex(/^[A-Z]{2}\d{1,2}$/); // platform code e.g. EW17
-const lineCode = z.enum(["EWL", "TEL", "NEL"]);
-const direction = z.string().regex(/^TO_[A-Z]{2,20}$/);
+const code = z.string().regex(PLATFORM_CODE_RE); // platform code e.g. EW17
+const lineCode = z.enum(LINE_CODE_LIST);
+const direction = z.string().regex(DIRECTION_KEY_RE);
 const confidence = z.enum(["high", "medium", "low"]);
 const platform = z.enum(["ios", "android", "desktop", "other"]);
 const hostname = z.string().regex(/^[a-z0-9.-]{1,80}$/);
@@ -86,6 +87,28 @@ export const EVENT_SCHEMAS = {
     trains: z.number().int().min(1).max(3),
   }),
   log_trip_event: z.strictObject({ kind: z.enum(TRIP_KINDS), station: code.optional(), line: lineCode.optional() }),
+  /** "I boarded" / "Got off" (owner or visitor). Minutes back = how far the time was moved back (0 = now). */
+  boarded_logged: z.strictObject({
+    station: code,
+    line: lineCode,
+    direction,
+    minutes_back: z.number().int().min(0).max(720),
+    user_type: z.enum(["owner", "visitor"]),
+    status: z.enum(["approved", "pending", "rate_limited"]).optional(),
+  }),
+  alighted_logged: z.strictObject({
+    station: code,
+    line: lineCode,
+    direction,
+    minutes_back: z.number().int().min(0).max(720),
+    user_type: z.enum(["owner", "visitor"]),
+    status: z.enum(["approved", "pending", "rate_limited"]).optional(),
+  }),
+  timeline_edit: z.strictObject({ action: z.enum(["edit_time", "delete", "add_missed"]), kind: z.enum(TRIP_KINDS) }),
+  stats_view: z.strictObject({ trips: z.number().int().min(0).max(100_000) }),
+  /** GPS suggestion: only the suggested station slug, never coordinates. */
+  geo_suggest_shown: z.strictObject({ station: slug, surface: z.enum(["home", "add", "boarding", "stations"]) }),
+  geo_suggest_accepted: z.strictObject({ station: slug, surface: z.enum(["home", "add", "boarding", "stations"]) }),
   submit_reading: z.strictObject({
     station: code,
     line: lineCode,

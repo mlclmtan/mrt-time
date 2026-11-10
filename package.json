@@ -1,6 +1,6 @@
 {
   "name": "mrt-time",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "private": true,
   "description": "MRT Time — Singapore MRT arrival predictions from timed platform-board readings, door-to-door commute planner and analytics practice product.",
   "scripts": {
@@ -16,6 +16,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
     "ads:seed": "tsx scripts/seed-ads.ts",
+    "sightings:backfill": "tsx scripts/backfill-sightings.ts",
     "sandbox:seed": "tsx scripts/sandbox-seed.ts",
     "sandbox:cost": "tsx scripts/sandbox-cost.ts",
     "icons": "node scripts/generate-icons.mjs",

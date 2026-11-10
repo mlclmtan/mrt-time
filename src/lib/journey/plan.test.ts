@@ -97,7 +97,10 @@ describe("network", () => {
     expect(directionBetween("NE3", "NE1")?.key).toBe("TO_HARBOURFRONT");
     expect(rideMinutes("EW17", "EW16")).toBe(3);
     expect(rideMinutes("EW15", "EW17")).toBe(5);
-    expect(rideMinutes("TE14", "TE17")).toBe(6); // 3 stops × 2 min default
+    // Observed TE17→TE2 37 min spreads over its 14 stops (~2.6 each): 3 stops ≈ 8.
+    expect(rideMinutes("TE14", "TE17")).toBe(8);
+    expect(rideMinutes("TE17", "TE2")).toBe(37);
+    expect(rideMinutes("NE3", "NE6")).toBe(6); // 3 stops × 2 min default
     // Outram Park estimates: EW↔TE observed 1–2 min (median 2).
     expect(transferMinutes("EW16", "TE17")).toBe(2);
     expect(transferMinutes("TE17", "EW16")).toBe(2);

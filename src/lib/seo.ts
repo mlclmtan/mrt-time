@@ -103,4 +103,4 @@ export function jsonLdString(value: unknown) {
 }
 
 export const SEO_STATIONS = STATIONS.filter((s) => s.seo);
-export const PUBLIC_PATHS = ["/", "/plan", "/accuracy", "/media-kit", "/about", "/privacy", "/terms", "/add"];
+export const PUBLIC_PATHS = ["/", "/plan", "/stations", "/accuracy", "/media-kit", "/about", "/privacy", "/terms", "/add"];

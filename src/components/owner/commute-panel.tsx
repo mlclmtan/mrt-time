@@ -41,16 +41,17 @@ const catchClass = (r: RideCell) =>
   r.ranged ? "bg-panel-2 text-muted" : r.catch === "tight" ? "bg-bad/15 text-bad" : r.catch === "likely" ? "bg-warn/15 text-warn" : "bg-go/15 text-go";
 
 /** "From a board reading 12 min ago" (age measured from now) / "Typical gap at this hour · every ~6 min". */
-function rideReason(t: T, r: RideCell, now: number) {
+function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
   if (!r.reason) return "";
-  if (r.reason.code === "reading_ago" && r.anchorAt != null)
-    return t("reason.reading_ago", { minutes: Math.max(0, Math.round((now - r.anchorAt) / MINUTE)) });
-  const base = reasonText(t, r.reason);
+  const fresh = r.reason.code === "reading_ago" || r.reason.code === "boarded_ago" || r.reason.code === "seen_elsewhere";
+  if (fresh && r.anchorAt != null)
+    return reasonText(t, { code: r.reason.code, params: { ...r.reason.params, minutes: Math.max(0, Math.round((now - r.anchorAt) / MINUTE)) } }, locale);
+  const base = reasonText(t, r.reason, locale);
   return r.reason.code === "historical_anchor" || r.headwayMin == null ? base : `${base} · ${t("commute.every", { n: r.headwayMin })}`;
 }
 
 export function CommutePanel({ view, now, staleAt }: { view: CommuteView | null; now: number; staleAt: number | null }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (!view) return null;
   const { progress, leaveNow, rows } = view;
   if (!leaveNow) return <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
@@ -94,7 +95,7 @@ export function CommutePanel({ view, now, staleAt }: { view: CommuteView | null;
                 <span className="led tabular">{boardText(r)}</span>
                 <span className={`chip ${confidenceClass(r.confidence)}`}>{t(`conf.${r.confidence}`)}</span>
               </div>
-              <p className="text-xs text-muted">{rideReason(t, r, now || view.generatedAt)}</p>
+              <p className="text-xs text-muted">{rideReason(t, r, now || view.generatedAt, locale)}</p>
               {r.tip && (
                 <p className="flex items-center gap-1 text-xs text-led">
                   <DoorOpen size={12} aria-hidden /> {t("commute.doors")}: {r.tip}

@@ -8,7 +8,7 @@ import { adReport, AD_REPORT_DIMENSIONS } from "@/lib/server/ads";
 import { parseRange } from "@/lib/server/admin";
 import { adSenseFromEnv } from "@/lib/ads/adsense";
 import { AD_BID_MODELS, AD_DEVICES, AD_OBJECTIVES, AD_TIME_BANDS, isAdFormat } from "@/lib/ads/formats";
-import { STATIONS } from "@/lib/network/data";
+import { LINE_CODE_LIST, STATIONS } from "@/lib/network/data";
 import { appUrl } from "@/lib/seo";
 import { sgtDate } from "@/lib/time";
 import { Card, DataTable } from "@/components/admin/charts";
@@ -96,7 +96,7 @@ export default async function AdsAdmin({ searchParams }: { searchParams: Promise
             <div className="grid gap-2 sm:col-span-4">
               <p className="text-xs font-semibold">{t("admin.ads.targeting")}</p>
               {checks("stations", STATIONS.map((s) => s.slug), Object.fromEntries(STATIONS.map((s) => [s.slug, s.name[locale]])))}
-              {checks("lines", ["EWL", "TEL", "NEL"])}
+              {checks("lines", [...LINE_CODE_LIST])}
               {checks("languages", ["en", "zh-Hant"])}
               {checks("timeBands", AD_TIME_BANDS)}
               {checks("devices", AD_DEVICES)}

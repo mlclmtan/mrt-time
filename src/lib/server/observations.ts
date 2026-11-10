@@ -91,18 +91,24 @@ export async function loadObservations(codes: string[], lines: string[], now: nu
   return [...platform, ...line].filter((o) => (o.id == null || seen.has(o.id) ? false : (seen.add(o.id), true)));
 }
 
-let windowsCache: { at: number; value: UnstableWindow[] } | null = null;
-export async function getUnstableWindows(now = Date.now()): Promise<UnstableWindow[]> {
-  if (!dbConfigured()) return DEFAULT_UNSTABLE_WINDOWS;
+export type WindowSettings = { windows: UnstableWindow[]; /** Edited in admin (then they win over learning). */ custom: boolean };
+let windowsCache: { at: number; value: WindowSettings } | null = null;
+/** Unstable windows: the admin's list when saved, else the built-in default (which learning may override). */
+export async function getWindowSettings(now = Date.now()): Promise<WindowSettings> {
+  const fallback = { windows: DEFAULT_UNSTABLE_WINDOWS, custom: false };
+  if (!dbConfigured()) return fallback;
   if (windowsCache && now - windowsCache.at < 60_000) return windowsCache.value;
   try {
     const row = await getDb().query.appSetting.findFirst({ where: eq(appSetting.key, "unstable_windows") });
-    const value = Array.isArray(row?.value) ? (row.value as UnstableWindow[]) : DEFAULT_UNSTABLE_WINDOWS;
+    const value = Array.isArray(row?.value) ? { windows: row.value as UnstableWindow[], custom: true } : fallback;
     windowsCache = { at: now, value };
     return value;
   } catch {
-    return DEFAULT_UNSTABLE_WINDOWS;
+    return fallback;
   }
+}
+export async function getUnstableWindows(now = Date.now()): Promise<UnstableWindow[]> {
+  return (await getWindowSettings(now)).windows;
 }
 export function clearWindowsCache() {
   windowsCache = null;

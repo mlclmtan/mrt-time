@@ -1,6 +1,6 @@
 /** Admin form → validated ad campaign / creative values (pure, tested). */
 import { z } from "zod";
-import { STATIONS } from "../network/data";
+import { LINE_CODE_LIST, STATIONS } from "../network/data";
 import { sgtInstant } from "../time";
 import type { AdTargeting } from "../db/schema";
 import { AD_BID_MODELS, AD_DEVICES, AD_FORMATS, AD_OBJECTIVES, AD_TIME_BANDS, validImageData } from "./formats";
@@ -34,7 +34,7 @@ const pick = (form: Form, name: string, allowed: readonly string[]) =>
 export function targetingFrom(form: Form): AdTargeting {
   const t: AdTargeting = {
     stations: pick(form, "stations", STATIONS.map((s) => s.slug)),
-    lines: pick(form, "lines", ["EWL", "TEL", "NEL"]),
+    lines: pick(form, "lines", [...LINE_CODE_LIST]),
     languages: pick(form, "languages", ["en", "zh-Hant"]),
     timeBands: pick(form, "timeBands", AD_TIME_BANDS),
     devices: pick(form, "devices", AD_DEVICES),

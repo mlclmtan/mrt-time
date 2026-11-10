@@ -1,5 +1,8 @@
 /** Every UI string. `zh-Hant` must define every key (enforced by the type). */
-export const en = {
+import { statsEn, statsZh } from "./dict-stats";
+import { v2En, v2Zh } from "./dict-v2";
+
+const baseEn = {
   "app.name": "MRT Time",
   "app.tagline": "Next-train times for Singapore MRT, from real platform boards",
   "nav.home": "Home",
@@ -414,10 +417,11 @@ export const en = {
   "admin.sandbox": "Practice sandbox runs",
 } as const;
 
+export const en = { ...baseEn, ...v2En, ...statsEn } as const;
 export type DictKey = keyof typeof en;
 export type Dict = Record<DictKey, string>;
 
-export const zhHant: Dict = {
+const baseZh: Record<keyof typeof baseEn, string> = {
   "app.name": "MRT Time",
   "app.tagline": "新加坡地鐵下一班車時間，來自真實月台顯示屏",
   "nav.home": "首頁",
@@ -831,3 +835,5 @@ export const zhHant: Dict = {
   "admin.feedback.nps": "淨推薦值",
   "admin.sandbox": "練習沙盒執行紀錄",
 };
+
+export const zhHant: Dict = { ...baseZh, ...v2Zh, ...statsZh };

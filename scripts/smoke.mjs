@@ -69,6 +69,9 @@ await page("/media-kit");
 await page("/zh-Hant");
 await page("/sign-in");
 await page("/add", "Add a board reading");
+await page("/stations", "Changi Airport");
+await page("/station/changi-airport", "Changi Airport");
+await page("/station/marina-bay", "Marina Bay");
 await check("GET /submit → /add", async () => {
   const { res } = await get("/submit");
   assert([301, 308].includes(res.status), `status ${res.status}`);
@@ -151,6 +154,33 @@ await check("GET /api/plan tiong-bahru → shenton-way (list)", async () => {
     assert(planTransfer && planTransfer.leg.min <= 2, `plan ${i}: transfer > 2 min`);
   }
   return `6 options · Outram transfer ${outram.min} min · ${ms} ms`;
+});
+
+await check("GET /api/board?station=changi-airport (v2 network)", async () => {
+  const { body, ms } = await getJson("/api/board?station=changi-airport");
+  const dirs = body.board.platforms.flatMap((p) => p.directions.map((d) => d.board.en));
+  assert(dirs.includes("Tanah Merah"), `directions ${dirs.join(", ")}`);
+  for (const p of body.board.platforms) for (const d of p.directions) assert(Array.isArray(d.seenToday), `${p.code} ${d.key}: no seenToday`);
+  return `${dirs.join(", ")} · ${ms} ms`;
+});
+
+await check("GET /api/plan tiong-bahru → changi-airport", async () => {
+  const { body, ms } = await getJson("/api/plan?from=tiong-bahru&to=changi-airport&mode=depart");
+  const rides = body.legs.filter((l) => l.kind === "ride");
+  assert(rides.at(-1)?.to === "CG2", `last ride ends at ${rides.at(-1)?.to}`);
+  return `${rides.length} rides · ${ms} ms`;
+});
+
+await check("POST /api/sightings with a bad body → 400", async () => {
+  const res = await fetch(new URL("/api/sightings", base), { method: "POST", headers: { "content-type": "application/json", origin: new URL(base).origin }, body: "{}" });
+  assert(res.status === 400 || res.status === 503, `status ${res.status}`);
+  return String(res.status);
+});
+
+await check("GET /api/trip-events without sign-in → 401", async () => {
+  const { res } = await get("/api/trip-events", "application/json");
+  assert(res.status === 401, `status ${res.status} (owner API must require auth)`);
+  return "401";
 });
 
 await check("GET /api/commute without sign-in → 401", async () => {

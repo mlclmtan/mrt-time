@@ -11,7 +11,7 @@ export async function SiteHeader({ role }: { role: Role | null }) {
   const href = (p: string) => localePath(locale, p);
   const links: [string, string][] = [
     ["/plan", t("nav.plan")],
-    ["/#stations", t("nav.stations")],
+    ["/stations", t("nav.stations")],
     ["/accuracy", t("nav.accuracy")],
     ["/add", t("nav.submit")],
   ];

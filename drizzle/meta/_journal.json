@@ -15,6 +15,13 @@
       "when": 1793710114090,
       "tag": "0001_ads",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794278938663,
+      "tag": "0002_train_sightings",
+      "breakpoints": true
     }
   ]
 }

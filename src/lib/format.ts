@@ -1,11 +1,15 @@
 import type { T, DictKey } from "./i18n";
 import type { Prediction } from "./predict/types";
 import { sgtClock } from "./time";
+import { stationForCode } from "./network";
 
 export const clock = (ms: number) => sgtClock(ms);
 
-export function reasonText(t: T, reason: Prediction["reason"]) {
-  return t(`reason.${reason.code}` as DictKey, reason.params);
+/** A platform code in reason params ("EW17") becomes the station name. */
+export function reasonText(t: T, reason: Prediction["reason"], locale: "en" | "zh-Hant" = "en") {
+  const params = { ...reason.params };
+  if (typeof params.station === "string") params.station = stationForCode(params.station)?.name[locale] ?? params.station;
+  return t(`reason.${reason.code}` as DictKey, params);
 }
 
 export function confidenceClass(c: Prediction["confidence"]) {

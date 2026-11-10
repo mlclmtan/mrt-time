@@ -20,7 +20,10 @@ export type Basis = "same_day" | "historical" | "band" | "closed" | "none";
 
 export type ReasonCode =
   | "reading_ago" // { minutes }
+  | "boarded_ago" // { minutes } someone boarded / got off a train here
+  | "seen_elsewhere" // { station, minutes, hops } the same train seen at another station
   | "historical_anchor" // { clock, days }
+  | "repeats" // { days } clock times repeated on recent days
   | "observed_gap" // { headway, count }
   | "typical_gap" // { headway }
   | "unstable_window" // { headway }
@@ -41,6 +44,14 @@ export type Prediction = {
   band: TimeBandKey;
   unstable: boolean;
   anchorAt?: number;
+  /** ± minutes on same-day times that came from a train seen further along the line. */
+  spreadMin?: number;
+  /** What the same-day times are based on. */
+  anchorKind?: "board_reading" | "boarded" | "alighted";
+  /** Platform where that train was seen (when it was another station). */
+  anchorStation?: string;
+  /** Learned day-to-day behaviour of this half hour at this platform. */
+  stability?: "repeats" | "drifts" | "unknown";
 };
 
 export type TimeBandKey = "weekday_am_peak" | "weekday_pm_peak" | "weekday_offpeak" | "weekend";

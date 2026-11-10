@@ -2,7 +2,7 @@
 
 Singapore MRT next-train times predicted from **timed platform-board readings** (there is no operator live-arrival feed), a **door-to-door commute planner** with transfers, and a **real marketing/analytics practice product** (GA4 + GTM, Meta Pixel + CAPI, Clarity, KOL and campaign tracking, experiments, SEO).
 
-Live at <https://mrt.91208274.xyz> · v1.0.0 · spec: [SPEC.md](SPEC.md)
+Live at <https://mrt.91208274.xyz> · v2.0.0 · spec: [SPEC.md](SPEC.md)
 
 > This repo is public. Personal data (home/office, owner email, real trip logs and readings) lives only in the database, seeded from the gitignored `private/seed.json`. Tests use synthetic fixtures only.
 
@@ -10,13 +10,14 @@ Live at <https://mrt.91208274.xyz> · v1.0.0 · spec: [SPEC.md](SPEC.md)
 
 | Area | What you get |
 |---|---|
-| Boards | `/station/[slug]` live board per platform direction: always the next 3 trains as SGT clock times with a live countdown — exact from a board reading today, otherwise "≈HH:MM ±N" estimates with an "Estimate" chip and a plain reason (wider ± in unstable windows, never an interval on its own). Under each direction a one-tap entry: "Board says: next train to Pasir Ris in [ ] min, then [ ] min" (chips 0–15, time seen = now, 10 s undo); the card turns exact at once. Crowd chips and service alerts from LTA DataMall; link to the bus app on disruption. Offline: last snapshot. |
-| Prediction | `src/lib/predict/`: same-day anchor (≤ 90 min, high confidence) → time-band headway (LTA 2–3 / 5–7 min, overridden by the observed median after ≥ 2 readings) → historical clock-time repeat (v0 port) only outside unstable windows (weekday 09:15–10:30 by default, editable in admin). |
+| Network | **Every MRT station** (146, Nov 2026): NSL, EWL incl. the Changi Airport branch, NEL, CCL (incl. Stage 6), DTL, TEL — codes, EN/中文 names, coordinates, running order, branch-aware directions named like the boards, interchange walks (estimates except Outram Park). `/stations` lists them by line, by search or **Near me**. Sources and licences: [docs/data-sources.md](docs/data-sources.md). |
+| Boards | `/station/[slug]` live board per platform direction: always the next 3 trains as SGT clock times with a live countdown — exact from a board reading today, otherwise "≈HH:MM ±N" estimates with an "Estimate" chip and a plain reason (wider ± in unstable windows, never an interval on its own). Under each direction a one-tap entry: "Board says: next train to Pasir Ris in [ ] min, then [ ] min" (chips 0–15, time seen = now, 10 s undo); the card turns exact at once. **I boarded / Got off** buttons with a time (Now · −1 · −2 · −5 min · Pick time, up to 12 h back) and **Trains seen today** (boarded here / shown on this board / seen at another station). Crowd chips and service alerts from LTA DataMall; link to the bus app on disruption. Offline: last snapshot. |
+| Prediction | `src/lib/predict/` (v2): **train sightings** (board readings, boardings, getting off) are propagated along the line by ride times (exact ≤ 2 stops, then ±1 min per 4 stops) and anchor every board the same day; a learned model per platform/direction, day type (weekday / Sat / Sun & PH) and 30-min band gives the usual gap and whether clock times **repeat** day to day (then projected) or **drift** (ranges). Admin unstable windows still force ranges; with too few days it falls back to the v1 rules. |
 | Planner | `/plan` and the owner home: walk / ride / transfer legs, catchable train per ride, transfer catch (tight / likely / wait ~N), best/worst case, **leave at**, **arrive by** and **next 6** modes, ≤ 2 transfers between any supported stations, rain hint (data.gov.sg) pointing to the sheltered variant. |
 | Owner home | Journey auto-picked by time (before 14:00 SGT Home→Office, after Office→Home; a manual pick holds 2 h). **Leave now →** card (arrive ~HH:MM, best–worst, per-leg confidence + reason, best-door tip) and **Next departures** (6 rows: leave → board leg 1 → transfer catch → board leg 2 → arrive, ranges in unstable windows) with a live "leave in m:ss" countdown. Recomputes from the remaining legs right after each tap and after a board reading. |
-| Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware one-tap logging (At platform → Boarded → Got off → Tap out → Arrived) with 10 s undo, one-tap board entry for the next journey platform, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
+| Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware logging with big **I boarded / Got off** buttons, time chips, the platform preselected from the journey or GPS (one tap to change) and 10 s undo; **Today's trip** timeline (edit time, delete, add a missed step, minutes waiting / riding / changing / walking); **/me/stats** (door→desk and desk→door, waits, Outram Park changes, rides, weekly trend, weekday, best time to leave); one-tap board entry for the next journey platform, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
 | Crowd-sourcing | `/add` (one screen: station → which way, named like the board → minutes; `/submit` redirects) and the inline station-page entry post `{ station, direction, minutes[], seenAt }`; public readings: rate limit 10/hour per device + daily IP hash; auto-approved when within ±2 min of an approved reading (or same-day prediction) in the same 30-min window, else moderated in `/admin/submissions`. Hermes posts readings/events to `/api/ingest`. |
-| Accuracy | Every owner "board" stores what was predicted for that moment; `/accuracy` shows hit rate (±1 min) by line, station and time band. |
+| Accuracy | `/accuracy` replays, for every real boarding, what we would have shown two minutes before and scores it (±1 min) by line, time band and station. |
 | Analytics | First-party `event_log` in Neon (zod-validated, no PII), Consent Mode v2 basic, GTM/gtag mirror, Meta Pixel + CAPI dedup, Clarity, Web Vitals, server-side anonymous page hits, first/last-touch UTM, internal-traffic flag, practice GA4 sandbox with synthetic data + cost CSV. |
 | Marketing | KOLs (`/k/[handle]`, `/r/[code]`), campaign builder with QR (SVG/PNG), experiments (landing hero A/B), feedback, NPS, newsletter (Resend double opt-in), `/media-kit`, EN / 繁體中文 (`/zh-Hant/...`), sitemap, robots, OG images, JSON-LD. |
 | Ads | Publisher side: Google AdSense (`NEXT_PUBLIC_ADSENSE_CLIENT` + slot ids, consent-gated, non-personalised without marketing consent, `/ads.txt`) and in-house "house ads" simulating Meta feed/story and Google display/search units, with targeting, pacing, frequency cap, A/B weights, impression/viewable/click tracking, GA4 `ad_*` events and an Ads report in admin. See [docs/ads-setup.md](docs/ads-setup.md). |
@@ -47,6 +48,7 @@ Useful scripts:
 | `pnpm db:migrate` | Apply migrations (needs `DATABASE_URL`). |
 | `pnpm db:seed` | Upsert owner data from `private/seed.json` (`--dry-run` validates only). |
 | `pnpm ads:seed` | Upsert the three self-promotional house campaigns (idempotent; run by Hermes). |
+| `pnpm sightings:backfill` | One train sighting per board/alight trip event logged before v2.0 (idempotent; run by Hermes after `db:migrate`; `--dry-run` counts only). |
 | `pnpm sandbox:seed` | Backfill the practice GA4 property (last 3 days, MP 72 h limit). |
 | `pnpm sandbox:cost --days 14 --out cost.csv` | Synthetic GA4 cost-import CSV. |
 | `pnpm qstash:schedules` | Create the 5-minute disruption-check schedule. |
@@ -62,8 +64,10 @@ src/
   proxy.ts             /zh-Hant rewrite, experiment bucket cookie, anonymous page hits
   lib/
     network/           lines, stations, directions, ride/transfer minutes, routing
-    predict/           prediction engine, unstable windows, accuracy, auto-approval
-    journey/           planner (depart / arrive-by / list), journey steps, prediction source
+    predict/           prediction engine, train sightings + propagation, learning, accuracy, auto-approval
+    journey/           planner (depart / arrive-by / list), journey steps, timeline segments, prediction source
+    stats/             commute stats (door→desk, waits, changes, rides, best time to leave)
+    sightings/         I boarded / Got off client helpers (time chips, undo)
     analytics/         event taxonomy, consent, tags, UTM, experiments, ingest, CAPI, admin SQL
     sandbox/           synthetic GA4 MP generator, guarded sender, cost CSV
     server/            DB queries, board, readings, trips, LTA, weather, journeys, metrics
@@ -83,11 +87,12 @@ docs/                  setup guides (below)
 - [docs/kol-playbook.md](docs/kol-playbook.md) — creating KOLs, links, codes, dashboard
 - [docs/ingest-api.md](docs/ingest-api.md) — Hermes ingest endpoint
 - [docs/ads-setup.md](docs/ads-setup.md) — AdSense, ads.txt, consent, house campaigns, GA4 ad events
+- [docs/data-sources.md](docs/data-sources.md) — station data sources and licences, network modelling notes
 
 ## Deploying (Vercel)
 
 1. Set env vars from `.env.example` (only what you use).
-2. `pnpm db:migrate` against Neon, then `pnpm db:seed` once the owner data file is in `private/`.
+2. `pnpm db:migrate` against Neon, then `pnpm db:seed` once the owner data file is in `private/`. Upgrading to v2.0: `pnpm db:migrate` (adds `train_sighting`) then `pnpm sightings:backfill`.
 3. `vercel.json` schedules `GET /api/cron/sandbox` daily at 00:30 SGT (needs `CRON_SECRET` and the sandbox GA4 env).
 4. Optional: `pnpm qstash:schedules` for disruption pushes (needs VAPID + QStash env and `APP_URL`).
 

@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { journeySteps, nextStepIndex, type StepKind } from "@/lib/journey/steps";
+import { LogIn, LogOut } from "lucide-react";
+import { journeySteps, nextStepIndex, type Step } from "@/lib/journey/steps";
 import type { Leg } from "@/lib/journey/plan";
 import {
   JOURNEY_CHOICE_COOKIE,
@@ -14,28 +15,28 @@ import {
   type JourneyChoice,
 } from "@/lib/journey/commute";
 import { clock } from "@/lib/format";
-import { getDirection, getPlatform, stationForCode } from "@/lib/network";
+import { getDirection, getPlatform, stationForCode, type LineCode } from "@/lib/network";
 import { MINUTE, nowMs } from "@/lib/time";
 import { randomId } from "@/lib/analytics/client";
+import { NOW_CHOICE, UNDO_MS, minutesBack, resolveTime, type TimeChoice } from "@/lib/sightings/client";
+import type { DictKey } from "@/lib/i18n";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 import { QuickEntry } from "../board/quick-entry";
 import { Planner } from "../plan/planner";
 import { VersionFooter } from "../version-footer";
+import { TimeChips } from "../boarding/time-chips";
+import { PlatformPicker, type PlatformChoice } from "../boarding/platform-picker";
 import { CommutePanel } from "./commute-panel";
+import { TripTimeline, kindLabel, type TimelineItem } from "./trip-timeline";
 
-type Journey = { key: string; name: string; fromPlace: string | null; legs: Leg[]; sheltered: boolean };
-type Logged = { kind: string; station?: string | null; at: number; journeyKey?: string | null };
+type Journey = { key: string; name: string; fromPlace: string | null; toPlace?: string | null; legs: Leg[]; sheltered: boolean };
+export type Logged = TimelineItem & { journeyKey?: string | null; clientId?: string };
+type TapKind = "door" | "desk" | "at_platform" | "board" | "alight" | "tap_out" | "arrived";
 
-const BUTTONS: { kind: StepKind; label: "owner.atPlatform" | "owner.boarded" | "owner.gotOff" | "owner.tapOut" | "owner.arrived" }[] = [
-  { kind: "at_platform", label: "owner.atPlatform" },
-  { kind: "board", label: "owner.boarded" },
-  { kind: "alight", label: "owner.gotOff" },
-  { kind: "tap_out", label: "owner.tapOut" },
-  { kind: "arrived", label: "owner.arrived" },
-];
-const UNDO_MS = 10_000;
 const POLL_MS = 60_000;
+/** "home" → the home door, "office" → the desk (journey ends for commute stats). */
+const placeKind = (place: string | null | undefined): TapKind => (place === "home" ? "door" : place === "office" ? "desk" : "arrived");
 
 export function OwnerHome({
   journeys,
@@ -66,9 +67,11 @@ export function OwnerHome({
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => initialView?.generatedAt ?? 0);
   const [refresh, setRefresh] = useState(0);
+  const [time, setTime] = useState<TimeChoice>(NOW_CHOICE);
+  const [override, setOverride] = useState<PlatformChoice | null>(null);
   const journey = journeys.find((j) => j.key === key);
   const steps = useMemo(() => (journey ? journeySteps(journey.legs) : []), [journey]);
-  const mine = useMemo(() => logged.filter((e) => !e.journeyKey || e.journeyKey === key), [logged, key]);
+  const mine = useMemo(() => logged.filter((e) => !e.journeyKey || e.journeyKey === key).sort((a, b) => a.at - b.at), [logged, key]);
   const nextIdx = nextStepIndex(steps, mine);
   const next = steps[nextIdx];
 
@@ -98,7 +101,7 @@ export function OwnerHome({
     };
   }, [journeys]);
 
-  // Recompute on journey/progress change, after taps and readings, and every minute.
+  // Recompute on journey/progress change, after taps, edits and readings, and every minute.
   useEffect(() => {
     if (!key) return;
     let stopped = false;
@@ -156,30 +159,67 @@ export function OwnerHome({
     setKey(k);
   }, []);
 
-  async function log(kind: StepKind) {
-    // Timestamp = the moment of the tap.
-    const at = nowMs();
-    const step = steps.slice(nextIdx).find((s) => s.kind === kind) ?? steps.find((s) => s.kind === kind) ?? { kind };
+  /** Today's taps from the server (ids for the timeline), then everything recomputes. */
+  const reload = useCallback(async () => {
+    const res = await fetch("/api/trip-events", { cache: "no-store" }).catch(() => null);
+    if (res?.ok) {
+      const body = (await res.json()) as { events: Logged[] };
+      setLogged(body.events);
+    }
+    setRefresh((n) => n + 1);
+  }, []);
+
+  // The platform the next ride tap is for: the owner's pick, else the journey's next step.
+  const stepPlatform = steps.slice(nextIdx).find((s) => (s.kind === "at_platform" || s.kind === "board" || s.kind === "alight") && s.station && s.direction);
+  const selected: PlatformChoice | null = override ?? (stepPlatform ? { station: stepPlatform.station!, direction: stepPlatform.direction! } : null);
+
+  async function log(kind: TapKind) {
+    const tapped = nowMs();
+    const at = resolveTime(time, tapped);
+    const usesPlatform = kind === "at_platform" || kind === "board" || kind === "alight";
+    const step: Step | undefined = steps.slice(nextIdx).find((s) => s.kind === kind) ?? steps.find((s) => s.kind === kind);
+    const platform = usesPlatform && selected ? getPlatform(selected.station) : step?.station ? getPlatform(step.station) : undefined;
+    const direction = usesPlatform && selected ? selected.direction : step?.direction;
     const clientId = randomId();
-    const label = t(BUTTONS.find((b) => b.kind === kind)!.label);
+    const label = t(kind === "board" ? "boarding.boarded" : kind === "alight" ? "boarding.gotOff" : kindLabel(kind));
     // Progress (and so the departures request) updates from this immediately.
-    setLogged((l) => [...l, { kind, station: step.station, at, journeyKey: key }]);
-    setNow(at);
-    setToast({ clientId, text: t("owner.logged", { what: label, time: clock(at) }), until: at + UNDO_MS });
-    track("log_trip_event", { kind, ...(step.station ? { station: step.station } : {}), ...(step.line ? { line: step.line as "EWL" } : {}) });
+    setLogged((l) => [...l, { id: -Date.now(), kind, at, station: platform?.code ?? null, line: platform?.line ?? null, direction: direction ?? null, journeyKey: key, clientId }]);
+    setNow(tapped);
+    setToast({ clientId, text: t("owner.logged", { what: label, time: clock(at) }), until: tapped + UNDO_MS });
+    setTime(NOW_CHOICE);
+    setOverride(null);
+    track("log_trip_event", { kind, ...(platform ? { station: platform.code, line: platform.line as LineCode } : {}) });
+    if ((kind === "board" || kind === "alight") && platform && direction)
+      track(kind === "board" ? "boarded_logged" : "alighted_logged", {
+        station: platform.code,
+        line: platform.line,
+        direction,
+        minutes_back: minutesBack(at, tapped),
+        user_type: "owner",
+        status: "approved",
+      });
     await fetch("/api/trip-events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientId, kind, at: new Date(at).toISOString(), station: step.station, line: step.line, direction: step.direction, journeyKey: key }),
+      body: JSON.stringify({
+        clientId,
+        kind,
+        at: new Date(at).toISOString(),
+        ...(platform ? { station: platform.code, line: platform.line } : {}),
+        ...(direction ? { direction } : {}),
+        journeyKey: key,
+      }),
     }).catch(() => null);
+    await reload();
   }
 
   async function undo() {
     if (!toast) return;
     const id = toast.clientId;
     setToast(null);
-    setLogged((l) => l.slice(0, -1));
+    setLogged((l) => l.filter((e) => e.clientId !== id));
     await fetch(`/api/trip-events?clientId=${id}`, { method: "DELETE" }).catch(() => null);
+    await reload();
   }
 
   const readingStep = steps.slice(nextIdx).find((s) => s.kind === "at_platform" || s.kind === "board") ?? steps.find((s) => s.kind === "at_platform");
@@ -188,6 +228,11 @@ export function OwnerHome({
   const entry = entryPlatform && entryDirection ? { station: entryPlatform.code, line: entryPlatform.line, direction: entryDirection.key, board: entryDirection.board } : null;
   const ends = journey ? journeyEnds(journey.legs) : undefined;
   const shownView = view && view.journeyKey === key ? view : null;
+  const startKind = placeKind(journey?.fromPlace);
+  const endKind = placeKind(journey?.toPlace);
+  const small: TapKind[] = [...(startKind !== "arrived" ? [startKind] : []), "at_platform", "tap_out", endKind];
+  const expected = next?.kind;
+  const nextLabel = next ? t(next.kind === "board" ? "boarding.boarded" : next.kind === "alight" ? "boarding.gotOff" : kindLabel(next.kind)) : "";
 
   return (
     <div className="space-y-5">
@@ -204,30 +249,59 @@ export function OwnerHome({
 
       <CommutePanel view={shownView} now={now} staleAt={staleAt} />
 
-      {next && <p className="text-sm text-muted">{t("owner.next", { step: t(BUTTONS.find((b) => b.kind === next.kind)!.label) + (next.station ? ` · ${next.station}` : "") })}</p>}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {BUTTONS.map((b) => {
-          const expected = next?.kind === b.kind;
-          return (
+      <section className="panel space-y-3 p-4" aria-label={t("owner.logTitle")}>
+        {next && (
+          <p className="text-sm text-muted">
+            {t("owner.next", { step: nextLabel + (next.station ? ` · ${stationForCode(next.station)?.name[locale] ?? next.station}` : "") })}
+          </p>
+        )}
+        <PlatformPicker key={selected ? `${selected.station}-${selected.direction}` : "none"} value={selected} onChange={setOverride} surface="home" />
+        <TimeChips value={time} onChange={setTime} now={now} />
+        <div className="grid grid-cols-2 gap-3">
+          {(["board", "alight"] as const).map((k) => (
             <button
-              key={b.kind}
+              key={k}
               type="button"
-              onClick={() => void log(b.kind)}
-              className={`btn min-h-16 text-lg ${expected ? "btn-primary ring-4 ring-led/30" : "btn-secondary"}`}
+              onClick={() => void log(k)}
+              className={`btn min-h-20 text-xl ${expected === k ? "btn-primary ring-4 ring-led/30" : "btn-secondary"}`}
             >
-              {t(b.label)}
+              {k === "board" ? <LogIn size={20} aria-hidden /> : <LogOut size={20} aria-hidden />}
+              {t(k === "board" ? "boarding.boarded" : "boarding.gotOff")}
             </button>
-          );
-        })}
-      </div>
-      {toast && (
-        <div role="status" className="panel flex items-center gap-3 px-4 py-3 text-sm">
-          <span className="flex-1">{toast.text}</span>
-          <button type="button" className="font-semibold text-led" onClick={() => void undo()}>
-            {t("owner.undo")}
-          </button>
+          ))}
         </div>
-      )}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {small.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => void log(k)}
+              className={`btn min-h-12 ${expected === k || (k === endKind && expected === "arrived") ? "btn-primary" : "btn-secondary"}`}
+            >
+              {t(kindLabel(k) as DictKey)}
+            </button>
+          ))}
+        </div>
+        {toast && (
+          <div role="status" className="flex items-center gap-3 rounded-lg bg-go/10 px-3 py-2 text-sm">
+            <span className="flex-1">{toast.text}</span>
+            <button type="button" className="font-semibold text-led" onClick={() => void undo()}>
+              {t("owner.undo")}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <details className="panel p-4" open={mine.length > 0}>
+        <summary className="cursor-pointer font-semibold">{t("timeline.title", { n: logged.length })}</summary>
+        <div className="mt-3">
+          <TripTimeline events={logged} onChanged={() => void reload()} />
+        </div>
+        <Link href={href("/me/stats")} className="mt-3 inline-block text-sm text-accent underline">
+          {t("stats.link")}
+        </Link>
+      </details>
+
       <VersionFooter />
       <section>
         <h2 className="mb-2 font-semibold">{t("owner.reading")}</h2>

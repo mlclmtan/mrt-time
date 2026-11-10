@@ -54,7 +54,7 @@ All three keys are optional; send up to 50 readings and 100 trip events per call
 | Field | Rules |
 |---|---|
 | `station` | Platform code, e.g. `EW17`, `TE19`, `NE3` (see `src/lib/network/data.ts`). |
-| `direction` | Must exist on the platform's line: EWL `TO_EAST` / `TO_WEST`, TEL `TO_BAYSHORE` / `TO_NORTH`, NEL `TO_HARBOURFRONT` / `TO_PUNGGOL`. |
+| `direction` | Must exist on the platform's line (v2.0 covers every MRT line): NSL `TO_JURONG_EAST` / `TO_MARINA_SOUTH_PIER`; EWL `TO_EAST` / `TO_WEST`, Changi Airport branch `TO_CHANGI_AIRPORT` / `TO_TANAH_MERAH`; NEL `TO_HARBOURFRONT` / `TO_PUNGGOL`; CCL `TO_DHOBY_GHAUT` / `TO_PRINCE_EDWARD_ROAD` / `TO_PROMENADE` (via Marina Bay); DTL `TO_BUKIT_PANJANG` / `TO_EXPO`; TEL `TO_BAYSHORE` / `TO_NORTH`. |
 | `minutes` | 1–3 integers (0–60), non-decreasing: next, next-next, optional third train. |
 | `capturedAt` | ISO 8601 with offset — the photo's capture time, **not** the time Hermes processed it. Default: now. Must be within the last 7 days. |
 | `destination` | Optional board destination text (≤ 40 chars). |
@@ -68,7 +68,7 @@ Readings from Hermes are stored as `source = "hermes"`, `status = "approved"` an
 | `clientId` | UUID; makes retries idempotent (one row per owner + clientId). |
 | `kind` | `door`, `lift_lobby`, `station_entrance`, `tap_in`, `at_platform`, `board`, `alight`, `tap_out`, `desk`, `arrived`. |
 | `at` | ISO 8601 with offset — the moment it happened (photo time), never the processing time. |
-| `station`, `line`, `direction` | Optional context. `board` events with `station` + `direction` also store the prediction for that moment in `prediction_check` (feeds `/accuracy`). |
+| `station`, `line`, `direction` | Optional context. `board` and `alight` events with `station` + `direction` also create a **train sighting** (`train_sighting`, `source = "hermes"`, approved): an exact sighting of a real train at that platform, which every board on the line uses at once (it is propagated along the line by ride times). `board` events also store the prediction for that moment in `prediction_check`. |
 | `journeyKey` | Optional: `home_to_office`, `office_to_home`, `office_to_home_tp`, … |
 | `note` | Optional free text (≤ 500 chars). Never sent to analytics. |
 
@@ -76,7 +76,7 @@ Readings from Hermes are stored as `source = "hermes"`, `status = "approved"` an
 
 | Status | Meaning |
 |---|---|
-| `201` | `{ "readings": [{ "ok": true, "id": 12, "status": "approved", "line": "TEL" }, …], "tripEvents": [{ "ok": true, "id": 40 }, …] }` — per-item results; invalid items come back as `{ "ok": false, "error": "invalid" }` without failing the batch. |
+| `201` | `{ "readings": [{ "ok": true, "id": 12, "status": "approved", "line": "TEL" }, …], "tripEvents": [{ "ok": true, "id": 40, "sightingId": 7 }, …] }` (`sightingId` is null for taps that are not a boarding / getting off at a known platform) — per-item results; invalid items come back as `{ "ok": false, "error": "invalid" }` without failing the batch. |
 | `400` | Body is not the shape above. |
 | `401` | Missing/wrong bearer token. |
 | `409` | Trip events sent but the owner user doesn't exist yet (readings in the same call were still saved). |
@@ -94,6 +94,31 @@ curl -sS -X POST "https://mrt.91208274.xyz/api/ingest" \
 ## Tips for extraction
 
 - Use the EXIF capture time of the photo as `capturedAt` / `at`, converted to `+08:00`.
-- Map the board's destination to a direction: Pasir Ris → `TO_EAST`; Joo Koon / Tuas Link → `TO_WEST`; Bayshore → `TO_BAYSHORE`; Woodlands North / Springleaf → `TO_NORTH`; HarbourFront → `TO_HARBOURFRONT`; Punggol Coast → `TO_PUNGGOL`.
+- Map the board's destination to a direction: Pasir Ris → `TO_EAST`; Joo Koon / Tuas Link → `TO_WEST`; Changi Airport → `TO_CHANGI_AIRPORT`; Tanah Merah (on the airport branch) → `TO_TANAH_MERAH`; Jurong East → `TO_JURONG_EAST`; Marina South Pier → `TO_MARINA_SOUTH_PIER`; Bayshore → `TO_BAYSHORE`; Woodlands North / Springleaf → `TO_NORTH` (send `destination: "Springleaf"` so the train isn't carried past Springleaf); HarbourFront → `TO_HARBOURFRONT`; Punggol Coast → `TO_PUNGGOL`; Dhoby Ghaut → `TO_DHOBY_GHAUT`; Prince Edward Road → `TO_PRINCE_EDWARD_ROAD`; Bukit Panjang → `TO_BUKIT_PANJANG`; Expo → `TO_EXPO`.
+- "I boarded at 10:14" / "got off at 10:17" in chat → a `board` / `alight` trip event with that `at`, the platform and the direction. That is the strongest evidence the app gets (better than a board countdown).
 - "Arr" or "0" on the board means `0` minutes.
 - The public form (`POST /api/readings`) is separate: it is rate-limited and auto-approves only readings consistent (±2 min) with an approved reading in the same 30-minute window.
+
+## Train sightings (v2.0)
+
+A sighting is a real train seen at a platform at a known moment. Three kinds feed predictions:
+
+| Kind | Where it comes from | Stored in |
+|---|---|---|
+| `board_reading` | Each minute on a board reading implies a train at `capturedAt + minutes`. | Derived from `observation` on the fly (nothing extra stored). |
+| `boarded` | A `board` trip event (owner / Hermes) or a public "I boarded". | `train_sighting` |
+| `alighted` | An `alight` trip event or a public "Got off". | `train_sighting` |
+
+Owner and Hermes sightings link to their trip event (`trip_event_id`, unique): editing the event's time or platform in the timeline moves the sighting, deleting the event deletes it. Public ones come from `POST /api/sightings` (`{ station, direction, kind: "boarded" | "alighted", at }`, up to 12 h back), share the board-reading rate limit (10/hour per device + daily IP hash) and are approved only when within ±2 min of a train already known there; otherwise the owner reviews them in **Admin → Submissions**.
+
+### Backfill (run once after the v2.0 migration)
+
+Trip events logged before v2.0 have no sighting yet. Hermes runs:
+
+```bash
+pnpm db:migrate              # applies drizzle/0002_train_sightings.sql
+pnpm sightings:backfill      # idempotent: one sighting per board/alight event with a platform + direction
+pnpm sightings:backfill --dry-run   # count only
+```
+
+Re-running the backfill updates the same rows (never duplicates).

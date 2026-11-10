@@ -25,6 +25,8 @@ describe("event taxonomy", () => {
         "share", "outbound_click", "alert_view", "crowd_view", "feedback_submit", "nps_submit", "newsletter_signup",
         "experiment_exposure", "kol_landing", "campaign_landing", "consent_update", "web_vital",
         "ad_impression", "ad_viewable", "ad_click",
+        // v2
+        "boarded_logged", "alighted_logged", "timeline_edit", "stats_view", "geo_suggest_shown", "geo_suggest_accepted",
       ].sort(),
     );
   });

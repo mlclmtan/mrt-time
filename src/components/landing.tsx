@@ -12,7 +12,7 @@ export function StationGrid({ locale, t }: { locale: Locale; t: T }) {
     <section id="stations" className="space-y-3">
       <h2 className="text-xl font-semibold">{t("landing.stations")}</h2>
       <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {STATIONS.map((s) => (
+        {STATIONS.filter((s) => s.seo).map((s) => (
           <li key={s.slug}>
             <Link href={localePath(locale, `/station/${s.slug}`)} className="panel flex items-center gap-2 px-4 py-3 hover:border-led">
               <span className="flex gap-1">
@@ -27,6 +27,9 @@ export function StationGrid({ locale, t }: { locale: Locale; t: T }) {
           </li>
         ))}
       </ul>
+      <Link href={localePath(locale, "/stations")} className="inline-block text-sm font-semibold text-accent underline">
+        {t("stations.all", { n: STATIONS.length })}
+      </Link>
     </section>
   );
 }
