@@ -13,6 +13,13 @@ import {
   transferMinutes,
 } from ".";
 import { LINE_PREFIX } from "./data";
+import { readFileSync } from "node:fs";
+import { zhHant } from "../i18n/dict";
+
+/** Characters that only exist in Simplified Chinese (their Traditional forms differ). */
+const SIMPLIFIED_ONLY =
+  "东兰乌湾龙门广场宝丽华乐叶宁览马镇线车长达务实贝莱维罗尔劳纳诺滨兴荣来连区园厦杨桥纽顿苏伦杰义谦凯陈庆万国体诰礼纬冈别让刹亚笼汤驱联黄绿红蓝环号码头机双开关边岛业坛汇会侨发圣经云观时间动闸选择请显设读数记录钟换"
+    .split("");
 
 describe("full MRT network data", () => {
   it("covers all six lines, each with contiguous running order and no duplicate codes", () => {
@@ -79,6 +86,71 @@ describe("full MRT network data", () => {
     for (const r of harbour) expect(r.transfers).toBeLessThanOrEqual(2);
     // Every station is reachable from Tiong Bahru with ≤ 2 changes.
     for (const s of STATIONS) if (s.slug !== "tiong-bahru") expect(findRoutes("tiong-bahru", s.slug).length, s.slug).toBeGreaterThan(0);
+  });
+
+  it("Tiong Bahru → Changi Airport always changes at Tanah Merah (no through train onto the branch)", () => {
+    const routes = findRoutes("tiong-bahru", "changi-airport");
+    expect(routes.length).toBeGreaterThan(0);
+    for (const r of routes) {
+      const rides = r.steps.filter((s) => s.kind === "ride");
+      // No single ride goes from the EWL trunk onto CG1/CG2.
+      for (const ride of rides) if (ride.to.startsWith("CG")) expect(["EW4", "CG1"]).toContain(ride.from);
+    }
+    const best = routes[0];
+    expect(best.steps.map((s) => (s.kind === "ride" ? `${s.from}>${s.to}` : `change@${s.at}`))).toEqual(["EW17>EW4", "change@tanah-merah", "EW4>CG2"]);
+    expect(best.transfers).toBe(1);
+  });
+
+  it("every direction has an explicit stop list (not code numbers), in running order", () => {
+    const of = (line: keyof typeof LINES, key: string) => LINES[line].directions[key].paths;
+    // Real numbering gaps are skipped; unopened stations are absent everywhere.
+    for (const missing of ["NS6", "NE2", "CC18", "TE10", "TE21", "TE22A", "DT36", "DT37", "TE30", "TE31", "CE1", "CE2"]) expect(PLATFORMS[missing]).toBeUndefined();
+    expect(of("NSL", "TO_MARINA_SOUTH_PIER")[0].slice(3, 6)).toEqual(["NS4", "NS5", "NS7"]);
+    expect(of("NEL", "TO_PUNGGOL")[0].slice(0, 3)).toEqual(["NE1", "NE3", "NE4"]);
+    expect(of("TEL", "TO_BAYSHORE")[0].slice(7, 10)).toEqual(["TE8", "TE9", "TE11"]);
+    expect(of("TEL", "TO_BAYSHORE")[0].slice(17, 20)).toEqual(["TE19", "TE20", "TE22"]);
+    expect(of("CCL", "TO_PRINCE_EDWARD_ROAD")[0].slice(15, 18)).toEqual(["CC16", "CC17", "CC19"]);
+    // Branch codes don't follow the trunk: CG1/CG2 hang off EW4; CC33/CC34 sit on the Promenade link.
+    expect(of("EWL", "TO_CHANGI_AIRPORT")).toEqual([["EW4", "CG1", "CG2"]]);
+    expect(of("EWL", "TO_EAST")[0]).not.toContain("CG1");
+    expect(of("CCL", "TO_PROMENADE")).toEqual([["CC32", "CC33", "CC34", "CC4"]]);
+    expect(of("CCL", "TO_DHOBY_GHAUT")[0].at(-1)).toBe("CC1");
+    // The source has no generated sequences any more.
+    const source = readFileSync(new URL("./data.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/function seq\(|seq\("/);
+  });
+
+  it("freezes the slugs, codes and direction keys stored rows and seeded journeys use", () => {
+    // Snapshot of v2.0.0 (deployed, migrated, backfilled). Renaming any of these
+    // orphans stored readings, sightings, trip events or journeys: add, never rename.
+    const frozen = JSON.parse(readFileSync(new URL("./__fixtures__/frozen-keys.json", import.meta.url), "utf8")) as {
+      stations: Record<string, string[]>;
+      directions: Record<string, string[]>;
+    };
+    for (const [slug, codes] of Object.entries(frozen.stations)) expect(getStation(slug)?.codes, slug).toEqual(codes);
+    for (const [line, keys] of Object.entries(frozen.directions))
+      for (const key of keys) expect(LINES[line as keyof typeof LINES].directions[key]?.key, `${line}:${key}`).toBe(key);
+    // The owner's seeded journeys (v1): EW17/EW16/EW15 TO_EAST/TO_WEST, TE17/TE19 TO_BAYSHORE/TO_NORTH.
+    for (const [code, dir] of [["EW17", "TO_EAST"], ["EW16", "TO_WEST"], ["EW15", "TO_WEST"], ["TE17", "TO_BAYSHORE"], ["TE19", "TO_NORTH"], ["NE3", "TO_PUNGGOL"], ["NE3", "TO_HARBOURFRONT"]])
+      expect(directionsAt(code).map((d) => d.key)).toContain(dir);
+  });
+
+  it("stations without sourced exits / nearby places / forecast area leave them out", () => {
+    const plain = getStation("kembangan")!;
+    expect(plain.exits).toBeUndefined();
+    expect(plain.nearby).toBeUndefined();
+    expect(plain.weatherArea).toBeUndefined();
+    expect(getStation("tiong-bahru")!.exits?.length).toBeGreaterThan(0);
+  });
+
+  it("Chinese names are Traditional (zh-Hant): no Simplified-only characters", () => {
+    const names = [
+      ...STATIONS.flatMap((s) => [s.name, ...(s.exits ?? []), ...(s.nearby ?? [])]),
+      ...Object.values(LINES).flatMap((l) => [l.name, ...Object.values(l.directions).flatMap((d) => [d.label, d.board, ...(d.alsoBoard ?? [])])]),
+    ].map((n) => n["zh-Hant"]);
+    const bad = names.filter((zh) => [...zh].some((ch) => SIMPLIFIED_ONLY.includes(ch)));
+    expect(bad).toEqual([]);
+    expect(Object.values(zhHant).filter((v) => [...v].some((ch) => SIMPLIFIED_ONLY.includes(ch)))).toEqual([]);
   });
 
   it("ride minutes: observed figures, then 2 min a stop", () => {

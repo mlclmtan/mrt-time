@@ -60,8 +60,10 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
       </header>
       <LiveBoard slug={slug} initial={{ board, alerts, crowd }} />
       <AdSlot placement="station" station={slug} />
-      {station.exits.length + station.nearby.length > 0 && (
+      {/* Only stations with hand-sourced exits / nearby places show these (never invented). */}
+      {(station.exits?.length || station.nearby?.length) ? (
       <section className="grid gap-4 sm:grid-cols-2">
+        {station.exits?.length ? (
         <div className="panel p-4">
           <h2 className="font-semibold">{t("station.exits")}</h2>
           <ul className="mt-2 list-disc pl-5 text-sm text-muted">
@@ -70,6 +72,8 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
             ))}
           </ul>
         </div>
+        ) : null}
+        {station.nearby?.length ? (
         <div className="panel p-4">
           <h2 className="font-semibold">{t("station.nearby")}</h2>
           <ul className="mt-2 list-disc pl-5 text-sm text-muted">
@@ -78,8 +82,9 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
             ))}
           </ul>
         </div>
+        ) : null}
       </section>
-      )}
+      ) : null}
       <section aria-label={t("ads.sponsored")} className="space-y-2">
         <h2 className="text-xs tracking-wide text-muted uppercase">{t("ads.sponsored")}</h2>
         <AdSlot placement="station_sponsored" station={slug} />

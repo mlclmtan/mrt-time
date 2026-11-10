@@ -1,0 +1,499 @@
+{
+ "stations": {
+  "tanjong-pagar": [
+   "EW15"
+  ],
+  "outram-park": [
+   "EW16",
+   "TE17",
+   "NE3"
+  ],
+  "tiong-bahru": [
+   "EW17"
+  ],
+  "redhill": [
+   "EW18"
+  ],
+  "pasir-ris": [
+   "EW1"
+  ],
+  "joo-koon": [
+   "EW29"
+  ],
+  "tuas-link": [
+   "EW33"
+  ],
+  "orchard": [
+   "NS22",
+   "TE14"
+  ],
+  "maxwell": [
+   "TE18"
+  ],
+  "shenton-way": [
+   "TE19"
+  ],
+  "woodlands-north": [
+   "TE1"
+  ],
+  "bayshore": [
+   "TE29"
+  ],
+  "harbourfront": [
+   "NE1",
+   "CC29"
+  ],
+  "punggol-coast": [
+   "NE18"
+  ],
+  "jurong-east": [
+   "NS1",
+   "EW24"
+  ],
+  "bukit-batok": [
+   "NS2"
+  ],
+  "bukit-gombak": [
+   "NS3"
+  ],
+  "choa-chu-kang": [
+   "NS4"
+  ],
+  "yew-tee": [
+   "NS5"
+  ],
+  "kranji": [
+   "NS7"
+  ],
+  "marsiling": [
+   "NS8"
+  ],
+  "woodlands": [
+   "NS9",
+   "TE2"
+  ],
+  "admiralty": [
+   "NS10"
+  ],
+  "sembawang": [
+   "NS11"
+  ],
+  "canberra": [
+   "NS12"
+  ],
+  "yishun": [
+   "NS13"
+  ],
+  "khatib": [
+   "NS14"
+  ],
+  "yio-chu-kang": [
+   "NS15"
+  ],
+  "ang-mo-kio": [
+   "NS16"
+  ],
+  "bishan": [
+   "NS17",
+   "CC15"
+  ],
+  "braddell": [
+   "NS18"
+  ],
+  "toa-payoh": [
+   "NS19"
+  ],
+  "novena": [
+   "NS20"
+  ],
+  "newton": [
+   "NS21",
+   "DT11"
+  ],
+  "somerset": [
+   "NS23"
+  ],
+  "dhoby-ghaut": [
+   "NS24",
+   "NE6",
+   "CC1"
+  ],
+  "city-hall": [
+   "NS25",
+   "EW13"
+  ],
+  "raffles-place": [
+   "NS26",
+   "EW14"
+  ],
+  "marina-bay": [
+   "NS27",
+   "CC33",
+   "TE20"
+  ],
+  "marina-south-pier": [
+   "NS28"
+  ],
+  "tampines": [
+   "EW2",
+   "DT32"
+  ],
+  "simei": [
+   "EW3"
+  ],
+  "tanah-merah": [
+   "EW4"
+  ],
+  "bedok": [
+   "EW5"
+  ],
+  "kembangan": [
+   "EW6"
+  ],
+  "eunos": [
+   "EW7"
+  ],
+  "paya-lebar": [
+   "EW8",
+   "CC9"
+  ],
+  "aljunied": [
+   "EW9"
+  ],
+  "kallang": [
+   "EW10"
+  ],
+  "lavender": [
+   "EW11"
+  ],
+  "bugis": [
+   "EW12",
+   "DT14"
+  ],
+  "queenstown": [
+   "EW19"
+  ],
+  "commonwealth": [
+   "EW20"
+  ],
+  "buona-vista": [
+   "EW21",
+   "CC22"
+  ],
+  "dover": [
+   "EW22"
+  ],
+  "clementi": [
+   "EW23"
+  ],
+  "chinese-garden": [
+   "EW25"
+  ],
+  "lakeside": [
+   "EW26"
+  ],
+  "boon-lay": [
+   "EW27"
+  ],
+  "pioneer": [
+   "EW28"
+  ],
+  "gul-circle": [
+   "EW30"
+  ],
+  "tuas-crescent": [
+   "EW31"
+  ],
+  "tuas-west-road": [
+   "EW32"
+  ],
+  "expo": [
+   "CG1",
+   "DT35"
+  ],
+  "changi-airport": [
+   "CG2"
+  ],
+  "chinatown": [
+   "NE4",
+   "DT19"
+  ],
+  "clarke-quay": [
+   "NE5"
+  ],
+  "little-india": [
+   "NE7",
+   "DT12"
+  ],
+  "farrer-park": [
+   "NE8"
+  ],
+  "boon-keng": [
+   "NE9"
+  ],
+  "potong-pasir": [
+   "NE10"
+  ],
+  "woodleigh": [
+   "NE11"
+  ],
+  "serangoon": [
+   "NE12",
+   "CC13"
+  ],
+  "kovan": [
+   "NE13"
+  ],
+  "hougang": [
+   "NE14"
+  ],
+  "buangkok": [
+   "NE15"
+  ],
+  "sengkang": [
+   "NE16"
+  ],
+  "punggol": [
+   "NE17"
+  ],
+  "bras-basah": [
+   "CC2"
+  ],
+  "esplanade": [
+   "CC3"
+  ],
+  "promenade": [
+   "CC4",
+   "DT15"
+  ],
+  "nicoll-highway": [
+   "CC5"
+  ],
+  "stadium": [
+   "CC6"
+  ],
+  "mountbatten": [
+   "CC7"
+  ],
+  "dakota": [
+   "CC8"
+  ],
+  "macpherson": [
+   "CC10",
+   "DT26"
+  ],
+  "tai-seng": [
+   "CC11"
+  ],
+  "bartley": [
+   "CC12"
+  ],
+  "lorong-chuan": [
+   "CC14"
+  ],
+  "marymount": [
+   "CC16"
+  ],
+  "caldecott": [
+   "CC17",
+   "TE9"
+  ],
+  "botanic-gardens": [
+   "CC19",
+   "DT9"
+  ],
+  "farrer-road": [
+   "CC20"
+  ],
+  "holland-village": [
+   "CC21"
+  ],
+  "one-north": [
+   "CC23"
+  ],
+  "kent-ridge": [
+   "CC24"
+  ],
+  "haw-par-villa": [
+   "CC25"
+  ],
+  "pasir-panjang": [
+   "CC26"
+  ],
+  "labrador-park": [
+   "CC27"
+  ],
+  "telok-blangah": [
+   "CC28"
+  ],
+  "keppel": [
+   "CC30"
+  ],
+  "cantonment": [
+   "CC31"
+  ],
+  "prince-edward-road": [
+   "CC32"
+  ],
+  "bayfront": [
+   "CC34",
+   "DT16"
+  ],
+  "bukit-panjang": [
+   "DT1"
+  ],
+  "cashew": [
+   "DT2"
+  ],
+  "hillview": [
+   "DT3"
+  ],
+  "hume": [
+   "DT4"
+  ],
+  "beauty-world": [
+   "DT5"
+  ],
+  "king-albert-park": [
+   "DT6"
+  ],
+  "sixth-avenue": [
+   "DT7"
+  ],
+  "tan-kah-kee": [
+   "DT8"
+  ],
+  "stevens": [
+   "DT10",
+   "TE11"
+  ],
+  "rochor": [
+   "DT13"
+  ],
+  "downtown": [
+   "DT17"
+  ],
+  "telok-ayer": [
+   "DT18"
+  ],
+  "fort-canning": [
+   "DT20"
+  ],
+  "bencoolen": [
+   "DT21"
+  ],
+  "jalan-besar": [
+   "DT22"
+  ],
+  "bendemeer": [
+   "DT23"
+  ],
+  "geylang-bahru": [
+   "DT24"
+  ],
+  "mattar": [
+   "DT25"
+  ],
+  "ubi": [
+   "DT27"
+  ],
+  "kaki-bukit": [
+   "DT28"
+  ],
+  "bedok-north": [
+   "DT29"
+  ],
+  "bedok-reservoir": [
+   "DT30"
+  ],
+  "tampines-west": [
+   "DT31"
+  ],
+  "tampines-east": [
+   "DT33"
+  ],
+  "upper-changi": [
+   "DT34"
+  ],
+  "woodlands-south": [
+   "TE3"
+  ],
+  "springleaf": [
+   "TE4"
+  ],
+  "lentor": [
+   "TE5"
+  ],
+  "mayflower": [
+   "TE6"
+  ],
+  "bright-hill": [
+   "TE7"
+  ],
+  "upper-thomson": [
+   "TE8"
+  ],
+  "napier": [
+   "TE12"
+  ],
+  "orchard-boulevard": [
+   "TE13"
+  ],
+  "great-world": [
+   "TE15"
+  ],
+  "havelock": [
+   "TE16"
+  ],
+  "gardens-by-the-bay": [
+   "TE22"
+  ],
+  "tanjong-rhu": [
+   "TE23"
+  ],
+  "katong-park": [
+   "TE24"
+  ],
+  "tanjong-katong": [
+   "TE25"
+  ],
+  "marine-parade": [
+   "TE26"
+  ],
+  "marine-terrace": [
+   "TE27"
+  ],
+  "siglap": [
+   "TE28"
+  ]
+ },
+ "directions": {
+  "NSL": [
+   "TO_JURONG_EAST",
+   "TO_MARINA_SOUTH_PIER"
+  ],
+  "EWL": [
+   "TO_CHANGI_AIRPORT",
+   "TO_EAST",
+   "TO_TANAH_MERAH",
+   "TO_WEST"
+  ],
+  "NEL": [
+   "TO_HARBOURFRONT",
+   "TO_PUNGGOL"
+  ],
+  "CCL": [
+   "TO_DHOBY_GHAUT",
+   "TO_PRINCE_EDWARD_ROAD",
+   "TO_PROMENADE"
+  ],
+  "DTL": [
+   "TO_BUKIT_PANJANG",
+   "TO_EXPO"
+  ],
+  "TEL": [
+   "TO_BAYSHORE",
+   "TO_NORTH"
+  ]
+ }
+}

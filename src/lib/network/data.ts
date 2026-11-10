@@ -62,8 +62,9 @@ export type Station = {
   lng: number;
   /** data.gov.sg 2-hour forecast area (else the nearest forecast area is used). */
   weatherArea?: string;
-  exits: Name[];
-  nearby: Name[];
+  /** Hand-sourced only (the v1 stations); absent elsewhere — never invented. */
+  exits?: Name[];
+  nearby?: Name[];
   /** Interchange walking minutes between two of this station's platforms ("A>B"). */
   transferMin?: Record<string, number>;
   /** Transfer figures that were observed (not estimates). */
@@ -75,23 +76,35 @@ export type Station = {
 const n = (en: string, zh: string): Name => ({ en, "zh-Hant": zh });
 const SERVICE = { serviceStart: 5 * 60 + 30, serviceEnd: 24 * 60 + 30 };
 
-/** "NS", 1..28 → ["NS1", …] skipping unopened numbers. */
-function seq(prefix: string, from: number, to: number, skip: number[] = []): string[] {
-  const out: string[] = [];
-  for (let i = from; i <= to; i++) if (!skip.includes(i)) out.push(`${prefix}${i}`);
-  return out;
-}
-const rev = (codes: string[]) => [...codes].reverse();
+const rev = (codes: readonly string[]) => [...codes].reverse();
 
-// Running order (opened stations only, November 2026). Unopened: NS6 Sungei
-// Kadut, NE2, CC18 Bukit Brown, TE10 Mount Pleasant, TE21 Marina South,
-// TE22A Founders' Memorial, DT36/DT37 and TE30/TE31 (planned late Dec 2026).
-const NS = seq("NS", 1, 28, [6]);
-const EW = seq("EW", 1, 33);
-const CG = ["EW4", "CG1", "CG2"];
-const NE = seq("NE", 1, 18, [2]);
-const DT = seq("DT", 1, 35);
-const TE = seq("TE", 1, 29, [10, 21]);
+/*
+ * Running order, written out stop by stop (opened stations only, November
+ * 2026). Never derived from code numbers: numbering has gaps (NS6 Sungei
+ * Kadut, NE2, CC18 Bukit Brown, TE10 Mount Pleasant, TE21 Marina South,
+ * TE22A Founders' Memorial; DT36/DT37 and TE30/TE31 open late Dec 2026),
+ * and branch codes don't follow the trunk (CG1/CG2 leave the EWL at EW4;
+ * CC33/CC34 were CE2/CE1). network.test.ts checks every list.
+ */
+const NS = [
+  "NS1", "NS2", "NS3", "NS4", "NS5", "NS7", "NS8", "NS9", "NS10", "NS11", "NS12", "NS13", "NS14", "NS15",
+  "NS16", "NS17", "NS18", "NS19", "NS20", "NS21", "NS22", "NS23", "NS24", "NS25", "NS26", "NS27", "NS28",
+] as const;
+const EW = [
+  "EW1", "EW2", "EW3", "EW4", "EW5", "EW6", "EW7", "EW8", "EW9", "EW10", "EW11", "EW12", "EW13", "EW14", "EW15", "EW16", "EW17",
+  "EW18", "EW19", "EW20", "EW21", "EW22", "EW23", "EW24", "EW25", "EW26", "EW27", "EW28", "EW29", "EW30", "EW31", "EW32", "EW33",
+] as const;
+/** Changi Airport branch: Tanah Merah (EW4) → Expo (CG1) → Changi Airport (CG2). */
+const CG = ["EW4", "CG1", "CG2"] as const;
+const NE = ["NE1", "NE3", "NE4", "NE5", "NE6", "NE7", "NE8", "NE9", "NE10", "NE11", "NE12", "NE13", "NE14", "NE15", "NE16", "NE17", "NE18"] as const;
+const DT = [
+  "DT1", "DT2", "DT3", "DT4", "DT5", "DT6", "DT7", "DT8", "DT9", "DT10", "DT11", "DT12", "DT13", "DT14", "DT15", "DT16", "DT17", "DT18",
+  "DT19", "DT20", "DT21", "DT22", "DT23", "DT24", "DT25", "DT26", "DT27", "DT28", "DT29", "DT30", "DT31", "DT32", "DT33", "DT34", "DT35",
+] as const;
+const TE = [
+  "TE1", "TE2", "TE3", "TE4", "TE5", "TE6", "TE7", "TE8", "TE9", "TE11", "TE12", "TE13", "TE14", "TE15",
+  "TE16", "TE17", "TE18", "TE19", "TE20", "TE22", "TE23", "TE24", "TE25", "TE26", "TE27", "TE28", "TE29",
+] as const;
 /**
  * Circle Line since Stage 6 (July 2026): Dhoby Ghaut → … → HarbourFront →
  * Keppel → Cantonment → Prince Edward Road, plus the link Prince Edward
@@ -99,8 +112,13 @@ const TE = seq("TE", 1, 29, [10, 21]);
  * The exact board destinations of the loop trains could not be confirmed
  * from open sources; see docs/data-sources.md.
  */
-const CC = seq("CC", 1, 32, [18]);
-const CC_LINK = ["CC32", "CC33", "CC34", "CC4"];
+const CC = [
+  "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9", "CC10", "CC11", "CC12", "CC13", "CC14", "CC15", "CC16",
+  "CC17", "CC19", "CC20", "CC21", "CC22", "CC23", "CC24", "CC25", "CC26", "CC27", "CC28", "CC29", "CC30", "CC31", "CC32",
+] as const;
+const CC_LINK = ["CC32", "CC33", "CC34", "CC4"] as const;
+/** Path literal → mutable copy (each direction owns its arrays). */
+const path = (codes: readonly string[]) => [...codes];
 
 export const LINES: Record<LineCode, Line> = {
   NSL: {
@@ -115,7 +133,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "NS28",
         label: n("To Marina South Pier", "往濱海南碼頭"),
         board: n("Marina South Pier", "濱海南碼頭"),
-        paths: [NS],
+        paths: [path(NS)],
       },
       TO_JURONG_EAST: {
         key: "TO_JURONG_EAST",
@@ -146,7 +164,7 @@ export const LINES: Record<LineCode, Line> = {
         alsoTerminals: ["EW29"],
         label: n("To Joo Koon / Tuas Link", "往裕群／大士連路"),
         board: n("Joo Koon / Tuas Link", "裕群／大士連路"),
-        paths: [EW],
+        paths: [path(EW)],
       },
       // Changi Airport branch: its own trains between Tanah Merah and Changi Airport.
       TO_CHANGI_AIRPORT: {
@@ -154,7 +172,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "CG2",
         label: n("To Changi Airport", "往樟宜機場"),
         board: n("Changi Airport", "樟宜機場"),
-        paths: [CG],
+        paths: [path(CG)],
       },
       TO_TANAH_MERAH: {
         key: "TO_TANAH_MERAH",
@@ -184,7 +202,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "NE18",
         label: n("To Punggol Coast", "往榜鵝海岸"),
         board: n("Punggol Coast", "榜鵝海岸"),
-        paths: [NE],
+        paths: [path(NE)],
       },
     },
   },
@@ -200,14 +218,14 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "CC32",
         label: n("To Prince Edward Road", "往愛德華太子路"),
         board: n("Prince Edward Road", "愛德華太子路"),
-        paths: [CC, rev(CC_LINK)],
+        paths: [path(CC), rev(CC_LINK)],
       },
       TO_PROMENADE: {
         key: "TO_PROMENADE",
         terminal: "CC4",
         label: n("To Promenade via Marina Bay", "經濱海灣往寶門廊"),
         board: n("Promenade", "寶門廊"),
-        paths: [CC_LINK],
+        paths: [path(CC_LINK)],
       },
       TO_DHOBY_GHAUT: {
         key: "TO_DHOBY_GHAUT",
@@ -230,7 +248,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "DT35",
         label: n("To Expo", "往博覽"),
         board: n("Expo", "博覽"),
-        paths: [DT],
+        paths: [path(DT)],
       },
       TO_BUKIT_PANJANG: {
         key: "TO_BUKIT_PANJANG",
@@ -253,7 +271,7 @@ export const LINES: Record<LineCode, Line> = {
         terminal: "TE29",
         label: n("To Bayshore", "往碧灣"),
         board: n("Bayshore", "碧灣"),
-        paths: [TE],
+        paths: [path(TE)],
       },
       TO_NORTH: {
         key: "TO_NORTH",
@@ -393,8 +411,6 @@ export const STATIONS: Station[] = STATION_ROWS.map(([codes, en, zh, lat, lng]) 
     codes: list,
     lat,
     lng,
-    exits: [],
-    nearby: [],
     ...extra,
     transferMin: { ...transfersFor(slug, list), ...extra.transferMin },
   };
