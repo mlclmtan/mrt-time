@@ -89,7 +89,7 @@ export function TripTimeline({ events, onChanged }: { events: TimelineItem[]; on
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-clarity-mask="True">
       {sorted.length === 0 ? (
         <p className="text-sm text-muted">{t("timeline.empty")}</p>
       ) : (

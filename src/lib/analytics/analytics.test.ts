@@ -6,7 +6,8 @@ import { consentModeSignals, parseConsent, serializeConsent } from "./consent";
 import { cleanIds, thirdPartyScripts } from "./scripts";
 import { buildCampaignUrl, kolUtm, utmFromSearch, utmToken } from "./utm";
 import { assignAll, assignVariant, significance, DEFAULT_EXPERIMENTS } from "./experiments";
-import { ga4Params, metaEventFor } from "./mapping";
+import { ga4Params, metaEventFor, privacyProps } from "./mapping";
+import { buildEventRow } from "./ingest";
 import { capiPayload } from "./meta-capi";
 import { coarseUa, dailyIpHash } from "./request";
 import { ThirdPartyScripts } from "@/components/analytics/third-party-scripts";
@@ -161,6 +162,26 @@ describe("UTM, experiments, mapping", () => {
     const body = capiPayload({ event: "Lead", custom: false, data: {} }, { eventId: "e1", eventTime: 1_700_000_000_000, url: "https://x/", userAgent: "UA", fbp: "fb.1.1.2" }, "TEST1");
     expect(body).toMatchObject({ test_event_code: "TEST1", data: [{ event_id: "e1", action_source: "website", user_data: { client_user_agent: "UA", fbp: "fb.1.1.2" } }] });
     expect(JSON.stringify(body)).not.toMatch(/client_ip_address|em"|ph"/);
+  });
+
+  it("visitors' boarded / got off / GPS events never carry the station with a device id, and never go to Meta (F9)", () => {
+    const boarded = { station: "EW17", line: "EWL", direction: "TO_EAST", minutes_back: 0, user_type: "visitor", status: "approved" };
+    expect(privacyProps("boarded_logged", boarded, "visitor")).not.toHaveProperty("station");
+    expect(privacyProps("boarded_logged", boarded, "visitor")).toMatchObject({ line: "EWL", direction: "TO_EAST" });
+    expect(privacyProps("alighted_logged", boarded, "visitor")).not.toHaveProperty("station");
+    expect(privacyProps("geo_suggest_accepted", { station: "tiong-bahru", surface: "add" }, "visitor")).toEqual({ surface: "add" });
+    // The owner (internal traffic) keeps it; other events are untouched.
+    expect(privacyProps("boarded_logged", boarded, "owner")).toHaveProperty("station", "EW17");
+    expect(privacyProps("station_view", { station: "orchard" }, "visitor")).toEqual({ station: "orchard" });
+    for (const name of ["boarded_logged", "alighted_logged", "geo_suggest_shown", "geo_suggest_accepted"] as const) expect(metaEventFor(name, boarded)).toBeNull();
+    // Still valid without the station, and the server-side ingest strips it too.
+    expect(validateEvent("geo_suggest_shown", { surface: "home" }).ok).toBe(true);
+    const row = buildEventRow(
+      { name: "boarded_logged", props: boarded, event_id: "evt-12345678", device_id: "dev-12345678", consent: { analytics: true, marketing: true }, route: "/station/tiong-bahru" },
+      { headers: new Headers({ "user-agent": "Mozilla/5.0 (iPhone)" }), userType: "visitor", now: Date.now(), origin: "https://x" },
+    );
+    expect(row.ok).toBe(true);
+    if (row.ok) expect(row.row.props).not.toHaveProperty("station");
   });
 
   it("coarse UA and salted daily IP hash", () => {

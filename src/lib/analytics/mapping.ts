@@ -51,10 +51,27 @@ export function ga4Params(name: EventName, props: Record<string, unknown>, ctx: 
   return params;
 }
 
+/**
+ * Events that say where a person is or rides. From visitors they never
+ * carry the station together with a device id: the station is dropped
+ * (line / direction / surface stay). They are never sent to Meta.
+ */
+export const LOCATION_EVENTS = ["boarded_logged", "alighted_logged", "geo_suggest_shown", "geo_suggest_accepted"] as const satisfies readonly EventName[];
+const isLocationEvent = (name: string) => (LOCATION_EVENTS as readonly string[]).includes(name);
+
+/** Props safe to send for this user: visitors' location events lose `station`. */
+export function privacyProps<P extends Record<string, unknown>>(name: string, props: P, userType: UserType): P {
+  if (userType !== "visitor" || !isLocationEvent(name) || !("station" in props)) return props;
+  const rest = { ...props };
+  delete rest.station;
+  return rest;
+}
+
 export type MetaEvent = { event: string; custom: boolean; data: Record<string, unknown> };
 
 /** Pixel/CAPI events: PageView, ViewContent, Lead, CompleteRegistration, PlanJourney. */
 export function metaEventFor(name: EventName, props: Record<string, unknown>): MetaEvent | null {
+  if (isLocationEvent(name)) return null; // never to ad platforms
   switch (name) {
     case "page_view":
       return { event: "PageView", custom: false, data: {} };

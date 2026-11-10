@@ -4,7 +4,7 @@ import { getDb } from "../db";
 import { device, eventLog } from "../db/schema";
 import { cleanReferrer, cleanRoute, envelopeSchema, validateEvent, type Envelope } from "./events";
 import { coarseUa, geoFromHeaders } from "./request";
-import { metaEventFor, type UserType } from "./mapping";
+import { metaEventFor, privacyProps, type UserType } from "./mapping";
 import { capiConfigured, capiPayload, sendCapi } from "./meta-capi";
 import { pageTypeFor } from "./page-type";
 
@@ -18,7 +18,8 @@ export function buildEventRow(
   const parsed = envelopeSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: "invalid_envelope" };
   const env: Envelope = parsed.data;
-  const event = validateEvent(env.name, env.props);
+  // Same rule server-side: a visitor's location events are stored without the station.
+  const event = validateEvent(env.name, privacyProps(env.name, (env.props ?? {}) as Record<string, unknown>, ctx.userType));
   if (!event.ok) return { ok: false, error: event.error };
   const consented = env.consent.analytics;
   const ua = coarseUa(ctx.headers.get("user-agent"));

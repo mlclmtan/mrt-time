@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
 import { validateEvent, type EventName, type EventProps } from "@/lib/analytics/events";
 import { consentModeSignals, type Consent } from "@/lib/analytics/consent";
-import { GA4_DIMENSIONS, ga4Params, metaEventFor, type UserType } from "@/lib/analytics/mapping";
+import { GA4_DIMENSIONS, ga4Params, metaEventFor, privacyProps, type UserType } from "@/lib/analytics/mapping";
 import { tagIdsFromEnv } from "@/lib/analytics/scripts";
 import { utmFromSearch, type Utm } from "@/lib/analytics/utm";
 import { pageTypeFor } from "@/lib/analytics/page-type";
@@ -71,7 +71,8 @@ export function AnalyticsProvider({
   const track = useCallback<Track>(
     (name, props) => {
       const c = consentRef.current;
-      const checked = validateEvent(name, props);
+      // Visitors: no station on boarded / got off / GPS events (never station + device together).
+      const checked = validateEvent(name, privacyProps(name, props as Record<string, unknown>, userType) as EventProps<typeof name>);
       if (!checked.ok) return;
       const any = c.analytics || c.marketing;
       if (!any) return; // the proxy counts anonymous page hits server-side

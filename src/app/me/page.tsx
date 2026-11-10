@@ -23,7 +23,7 @@ export default async function MePage() {
     dbConfigured() ? todaysEvents(session.user.id).catch(() => []) : Promise.resolve([]),
   ]);
   return (
-    <div className="space-y-6 pt-6">
+    <div className="space-y-6 pt-6" data-clarity-mask="True">
       <h1 className="text-3xl font-bold">{t("nav.me")}</h1>
       <section className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-baseline gap-3">

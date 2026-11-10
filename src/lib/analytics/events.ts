@@ -89,7 +89,8 @@ export const EVENT_SCHEMAS = {
   log_trip_event: z.strictObject({ kind: z.enum(TRIP_KINDS), station: code.optional(), line: lineCode.optional() }),
   /** "I boarded" / "Got off" (owner or visitor). Minutes back = how far the time was moved back (0 = now). */
   boarded_logged: z.strictObject({
-    station: code,
+    /** Owner only: dropped for visitors (privacyProps). */
+    station: code.optional(),
     line: lineCode,
     direction,
     minutes_back: z.number().int().min(0).max(720),
@@ -97,7 +98,7 @@ export const EVENT_SCHEMAS = {
     status: z.enum(["approved", "pending", "rate_limited"]).optional(),
   }),
   alighted_logged: z.strictObject({
-    station: code,
+    station: code.optional(),
     line: lineCode,
     direction,
     minutes_back: z.number().int().min(0).max(720),
@@ -107,8 +108,8 @@ export const EVENT_SCHEMAS = {
   timeline_edit: z.strictObject({ action: z.enum(["edit_time", "delete", "add_missed"]), kind: z.enum(TRIP_KINDS) }),
   stats_view: z.strictObject({ trips: z.number().int().min(0).max(100_000) }),
   /** GPS suggestion: only the suggested station slug, never coordinates. */
-  geo_suggest_shown: z.strictObject({ station: slug, surface: z.enum(["home", "add", "boarding", "stations"]) }),
-  geo_suggest_accepted: z.strictObject({ station: slug, surface: z.enum(["home", "add", "boarding", "stations"]) }),
+  geo_suggest_shown: z.strictObject({ station: slug.optional(), surface: z.enum(["home", "add", "boarding", "stations"]) }),
+  geo_suggest_accepted: z.strictObject({ station: slug.optional(), surface: z.enum(["home", "add", "boarding", "stations"]) }),
   submit_reading: z.strictObject({
     station: code,
     line: lineCode,

@@ -92,7 +92,7 @@ export default async function StatsPage() {
   const best = stats.bestLeave?.best;
 
   return (
-    <div className="space-y-6 pt-6">
+    <div className="space-y-6 pt-6" data-clarity-mask="True">
       <StatsTracker trips={tripCount} />
       <Link href={localePath(locale, "/me")} className="text-sm text-accent underline">
         ← {t("stats.back")}
