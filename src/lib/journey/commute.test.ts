@@ -131,7 +131,7 @@ describe("commute progress", () => {
       ],
       now,
     );
-    expect(boarded).toEqual({ state: "on_board", fromLeg: 2, startAt: now + 2 * MINUTE });
+    expect(boarded).toEqual({ state: "on_board", fromLeg: 2, startAt: now + 2 * MINUTE }); // boarded 07:59 + 3 min ride
     expect(commuteProgress(legs, [{ kind: "alight", station: "TE19", at: now }], now)).toMatchObject({ state: "between", fromLeg: 4 });
     expect(commuteProgress(legs, [{ kind: "arrived", at: now }], now).state).toBe("idle");
     expect(commuteProgress(legs, [{ kind: "at_platform", station: "EW17", at: now - 2 * 60 * MINUTE }], now).state).toBe("idle");
@@ -147,5 +147,44 @@ describe("commute progress", () => {
     const done = commuteView("home_to_office", legs, { state: "between", fromLeg: legs.length, startAt: now }, timed, now);
     expect(done.rows).toEqual([]);
     expect(done.leaveNow).toBeNull();
+  });
+});
+
+describe("stale 'on board' (H1, live 2026-11-10)", () => {
+  // Owner logged: boarded EW17 10:14, boarded TE17 10:17 (no "got off" logged), Home→Office.
+  const taps = [
+    { kind: "board", station: "EW17", at: at("10:14") },
+    { kind: "board", station: "TE17", at: at("10:17") },
+  ];
+
+  it("plans the rest of the trip from the tap times, not from now", () => {
+    const p = commuteProgress(legs, taps, at("10:19"));
+    // TE17 → TE19 is 3 min: the ride ends ~10:20 whatever the clock says.
+    expect(p).toEqual({ state: "on_board", fromLeg: 4, startAt: at("10:20") });
+    expect(commuteProgress(legs, taps, at("10:35")).startAt).toBe(at("10:20"));
+    const view = commuteView("home_to_office", legs, p, timed, at("10:19"));
+    expect(sgtClock(view.leaveNow!.arriveAt)).toBe("10:25"); // + 5 min walk
+    expect(view.rows).toEqual([]);
+  });
+
+  it("is finished ('Arrived ~10:25?') once now is past the expected arrival + 15 min — never 'on board' at 11:19", () => {
+    const at1039 = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("10:39")), timed, at("10:39"));
+    expect(at1039.progress.state).toBe("on_board");
+    const at1041 = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("10:41")), timed, at("10:41"));
+    expect(at1041.progress).toMatchObject({ state: "finished", arrivedAt: at("10:25") });
+    expect(at1041.leaveNow).toBeNull();
+    const at1119 = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("11:19")), timed, at("11:19"));
+    expect(at1119.progress.state).toBe("finished");
+    expect(sgtClock(at1119.progress.arrivedAt!)).toBe("10:25");
+  });
+
+  it("got off and changing: the change starts when you got off", () => {
+    const off = [...taps.slice(0, 1), { kind: "alight", station: "EW16", at: at("10:17") }];
+    const p = commuteProgress(legs, off, at("10:18"));
+    expect(p).toEqual({ state: "between", fromLeg: 2, startAt: at("10:17") });
+    const view = commuteView("home_to_office", legs, p, timed, at("10:18"));
+    // 2-min change → TEL trains every 6 from 07:03 → 10:21; + 3 + 5 → 10:29.
+    expect(sgtClock(view.leaveNow!.rides[0].boardAt)).toBe("10:21");
+    expect(sgtClock(view.leaveNow!.arriveAt)).toBe("10:29");
   });
 });

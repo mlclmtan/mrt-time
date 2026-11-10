@@ -5,6 +5,7 @@ import type { Role } from "@/lib/auth/access";
 import { LanguageSwitch } from "./language-switch";
 import { UpdateBanner, VersionTag } from "./update-banner";
 import { NavTabs } from "./nav-tabs";
+import { FeedbackLink } from "./voc/feedback-widget";
 
 export async function SiteHeader({ role }: { role: Role | null }) {
   const { locale, t } = await getT();
@@ -49,6 +50,7 @@ export async function SiteFooter() {
         <Link href={href("/privacy")}>{t("nav.privacy")}</Link>
         <Link href={href("/terms")}>{t("nav.terms")}</Link>
         <Link href={href("/sign-in")}>{t("nav.signIn")}</Link>
+        <FeedbackLink className="text-left" />
       </div>
       <VersionTag className="mt-3 block" />
     </footer>

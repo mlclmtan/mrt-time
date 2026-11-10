@@ -13,7 +13,7 @@ describe("I boarded / Got off", () => {
   it("shows the two big buttons and the time chips in plain words", () => {
     const html = renderToStaticMarkup(<BoardingButtons station="EW17" line="EWL" direction="TO_EAST" destination="Pasir Ris" />);
     const text = visibleText(html);
-    for (const s of ["I boarded", "Got off", "Now", "−1 min", "−2 min", "−5 min", "Pick time", "Pasir Ris"]) expect(text).toContain(s);
+    for (const s of ["I boarded", "Got off", "Now", "−1 min", "−2 min", "−5 min", "Other time", "Pasir Ris"]) expect(text).toContain(s);
     expect(text).not.toMatch(JARGON);
   });
 

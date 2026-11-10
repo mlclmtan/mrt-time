@@ -12,11 +12,14 @@ export function PlatformPicker({
   onChange,
   surface,
   startOpen = false,
+  geo = true,
 }: {
   value: PlatformChoice | null;
   onChange: (v: PlatformChoice) => void;
   surface: Surface;
   startOpen?: boolean;
+  /** Offer "You're at …?" from GPS. Off on Home while a journey step is set: GPS never overrides it. */
+  geo?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(startOpen || !value);
@@ -44,6 +47,7 @@ export function PlatformPicker({
           {t("entry.change")}
         </button>
       </div>
+      {geo && (
       <GeoSuggest
         surface={surface}
         current={station?.slug}
@@ -54,6 +58,7 @@ export function PlatformPicker({
           if (first && directionChoices(s).length === 1) onChange({ station: first.station, direction: first.direction });
         }}
       />
+      )}
       {open && (
         <div className="space-y-2 rounded-lg border border-line p-3">
           <input type="search" className="field" placeholder={t("add.search")} aria-label={t("add.search")} value={query} onChange={(e) => setQuery(e.target.value)} />

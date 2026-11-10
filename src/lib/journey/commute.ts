@@ -24,6 +24,8 @@ export const DEPARTURE_ROWS = 6;
 export const MANUAL_CHOICE_TTL_MS = 2 * HOUR;
 /** Taps older than this no longer place the owner along the journey. */
 export const PROGRESS_STALE_MS = 90 * MINUTE;
+/** Once now is this far past the expected arrival, the trip is over ("Arrived ~10:25?"). */
+export const FINISHED_AFTER_MS = 15 * MINUTE;
 export const JOURNEY_CHOICE_COOKIE = "mrt_journey";
 
 /* ---------- Journey choice ---------- */
@@ -70,13 +72,19 @@ export function journeyEnds(legs: Leg[]) {
 
 /* ---------- Where am I along the journey? ---------- */
 
-export type CommuteState = "idle" | "at_platform" | "on_board" | "between";
+export type CommuteState = "idle" | "at_platform" | "on_board" | "between" | "finished";
 export type CommuteProgress = {
   state: CommuteState;
   /** Index into the journey's legs where the remaining trip starts. */
   fromLeg: number;
-  /** When the remaining trip starts (now, or when the current ride ends). */
+  /**
+   * When the remaining trip starts, from the tap times — never "now" once
+   * moving: the end of the current ride (boarded + ride minutes), or the
+   * moment you got off / tapped out. On the platform: now (still waiting).
+   */
   startAt: number;
+  /** "finished" only: when we expected you to arrive. */
+  arrivedAt?: number;
 };
 type Tap = { kind: string; station?: string | null; at: number };
 
@@ -95,15 +103,16 @@ export function commuteProgress(legs: Leg[], taps: Tap[], now: number): CommuteP
     case "at_platform":
       return { state: "at_platform", fromLeg: ride, startAt: now };
     case "board": {
+      // The rest of the trip starts when this ride ends: boarded + ride minutes (not now).
       const leg = legs[ride];
-      const boardedAt = [...sorted].reverse().find((e) => e.kind === "board")?.at ?? now;
-      const rideEnd = leg.kind === "ride" ? boardedAt + legRideMin(leg) * MINUTE : now;
-      return { state: "on_board", fromLeg: ride + 1, startAt: Math.max(now, rideEnd) };
+      const boardedAt = [...sorted].reverse().find((e) => e.kind === "board")?.at ?? latest.at;
+      const rideEnd = leg.kind === "ride" ? boardedAt + legRideMin(leg) * MINUTE : boardedAt;
+      return { state: "on_board", fromLeg: ride + 1, startAt: rideEnd };
     }
     case "alight":
-      return { state: "between", fromLeg: ride + 1, startAt: now };
+      return { state: "between", fromLeg: ride + 1, startAt: [...sorted].reverse().find((e) => e.kind === "alight")?.at ?? latest.at };
     case "tap_out":
-      return { state: "between", fromLeg: (rideAt.at(-1) ?? legs.length - 1) + 1, startAt: now };
+      return { state: "between", fromLeg: (rideAt.at(-1) ?? legs.length - 1) + 1, startAt: [...sorted].reverse().find((e) => e.kind === "tap_out")?.at ?? latest.at };
     default:
       // Arrived: the trip is over, so show the whole journey again.
       return idle;
@@ -189,15 +198,30 @@ export type CommuteView = {
   rows: DepartureRow[];
 };
 
+/**
+ * Idle / on the platform: plan from now. Moving (on board, got off, tapped
+ * out): plan the rest from the tap times, never re-plan the ride from now —
+ * and once now is past the expected arrival + 15 min the trip is finished
+ * ("Arrived ~10:25? Log desk / dismiss"), nothing left to plan.
+ */
 export function commuteView(journeyKey: string, legs: Leg[], progress: CommuteProgress, source: TrainSource, now: number): CommuteView {
   const remaining = legs.slice(Math.min(Math.max(0, progress.fromLeg), legs.length));
-  if (!remaining.length) return { journeyKey, progress, generatedAt: now, leaveNow: null, rows: [] };
-  const start = Math.max(now, progress.startAt);
+  const moving = progress.state === "on_board" || progress.state === "between";
+  if (!remaining.length) {
+    if (moving && now > progress.startAt + FINISHED_AFTER_MS)
+      return { journeyKey, progress: { ...progress, state: "finished", arrivedAt: progress.startAt }, generatedAt: now, leaveNow: null, rows: [] };
+    return { journeyKey, progress, generatedAt: now, leaveNow: null, rows: [] };
+  }
+  const start = moving ? progress.startAt : Math.max(now, progress.startAt);
+  const leaveNow = departureRow(planForward(remaining, start, source));
+  if (moving && now > leaveNow.arriveAt + FINISHED_AFTER_MS)
+    return { journeyKey, progress: { ...progress, state: "finished", arrivedAt: leaveNow.arriveAt }, generatedAt: now, leaveNow: null, rows: [] };
   return {
     journeyKey,
     progress,
     generatedAt: now,
-    leaveNow: departureRow(planForward(remaining, start, source)),
-    rows: nextDepartures(remaining, start, source),
+    leaveNow,
+    // Moving: the plan from the taps is the one that matters; no list of later departures.
+    rows: moving ? [] : nextDepartures(remaining, start, source),
   };
 }

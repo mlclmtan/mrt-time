@@ -50,10 +50,39 @@ function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
   return r.reason.code === "historical_anchor" || r.headwayMin == null ? base : `${base} · ${t("commute.every", { n: r.headwayMin })}`;
 }
 
-export function CommutePanel({ view, now, staleAt }: { view: CommuteView | null; now: number; staleAt: number | null }) {
+export type FinishedPrompt = { what: string; onLog: () => void; onDismiss: () => void };
+
+export function CommutePanel({
+  view,
+  now,
+  staleAt,
+  finished,
+}: {
+  view: CommuteView | null;
+  now: number;
+  staleAt: number | null;
+  /** The trip is over (now > expected arrival + 15 min): "Arrived ~10:25? Log desk / Dismiss". */
+  finished?: FinishedPrompt | null;
+}) {
   const { t, locale } = useI18n();
   if (!view) return null;
   const { progress, leaveNow, rows } = view;
+  if (progress.state === "finished") {
+    if (!finished) return null;
+    return (
+      <section className="panel rise space-y-3 p-4" data-commute-state="finished">
+        <p className="led text-2xl font-bold">{t("commute.state.finished", { time: clock(progress.arrivedAt ?? progress.startAt) })}</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn btn-primary" onClick={finished.onLog}>
+            {t("commute.finished.log", { what: finished.what })}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={finished.onDismiss}>
+            {t("commute.finished.dismiss")}
+          </button>
+        </div>
+      </section>
+    );
+  }
   if (!leaveNow) return <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
   const first = rows[0];
   const idle = progress.state === "idle";
@@ -64,7 +93,7 @@ export function CommutePanel({ view, now, staleAt }: { view: CommuteView | null;
     <div className="space-y-3">
       {!idle && (
         <p className="text-sm text-accent">
-          {t(`commute.state.${progress.state as Exclude<typeof progress.state, "idle">}`, { time: clock(progress.startAt) })}
+          {t(`commute.state.${progress.state as Exclude<typeof progress.state, "idle" | "finished">}`, { time: clock(progress.startAt) })}
         </p>
       )}
 

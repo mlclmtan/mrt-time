@@ -6,6 +6,7 @@ import { ConsentSettings } from "@/components/analytics/consent-banner";
 import { VersionFooter } from "@/components/version-footer";
 import { LanguageSwitch } from "@/components/language-switch";
 import { OwnerSettings } from "@/components/owner/owner-settings";
+import { FeedbackLink } from "@/components/voc/feedback-widget";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -22,6 +23,10 @@ export default async function SettingsPage() {
       <section className="panel flex items-center justify-between p-4">
         <h2 className="font-semibold">{t("lang.label")}</h2>
         <LanguageSwitch />
+      </section>
+      <section className="panel flex items-center justify-between p-4">
+        <h2 className="font-semibold">{t("feedback.title")}</h2>
+        <FeedbackLink className="btn btn-secondary px-3 py-1.5 text-sm" />
       </section>
       <section id="install" className="panel scroll-mt-24 space-y-1 p-4">
         <h2 className="font-semibold">{t("settings.install")}</h2>

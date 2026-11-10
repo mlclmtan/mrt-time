@@ -76,6 +76,14 @@ button:disabled {
 .float-bottom {
   bottom: calc(max(var(--consent-h, 0px), env(safe-area-inset-bottom)) + 12px);
 }
+/*
+ * Owner Home's next-step button: sticky above the consent sheet and the
+ * safe area, so it is never covered (H2, v2.1). Natural position is near
+ * the top of Home; it only sticks when that would be under the sheet.
+ */
+.next-step-dock {
+  bottom: calc(max(var(--consent-h, 0px), env(safe-area-inset-bottom)) + 8px);
+}
 /* Horizontally scrollable rows (tabs) without a visible scrollbar. */
 .no-scrollbar {
   scrollbar-width: none;

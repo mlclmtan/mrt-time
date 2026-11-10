@@ -1,19 +1,53 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { MessageSquare, X } from "lucide-react";
 import { FEEDBACK_CATEGORIES } from "@/lib/analytics/events";
+import { splitLocale } from "@/lib/i18n";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
+
+/** Window event that opens the feedback form (footer / Settings link). */
+export const OPEN_FEEDBACK_EVENT = "mrt:feedback";
+
+/**
+ * The floating button is hidden on the owner's Home: it covered the logging
+ * buttons at 393×852 (with the consent sheet). The form stays reachable from
+ * the footer and Settings (`FeedbackLink`).
+ */
+export function showFloatingFeedback(path: string, userType: string): boolean {
+  return !(userType === "owner" && splitLocale(path).path === "/");
+}
+
+/** "Feedback" as a plain link (footer, Settings): opens the same form. */
+export function FeedbackLink({ className }: { className?: string }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" className={className ?? "underline"} onClick={() => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT))}>
+      {t("feedback.cta")}
+    </button>
+  );
+}
 
 /** Rating + category + optional text. Text goes to Neon only; analytics gets rating+category. */
 export function FeedbackWidget() {
   const { t, locale } = useI18n();
-  const { track, deviceId } = useAnalytics();
+  const { track, deviceId, userType } = useAnalytics();
+  const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [category, setCategory] = useState<(typeof FEEDBACK_CATEGORIES)[number]>("accuracy");
   const [text, setText] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  useEffect(() => {
+    const show = () => {
+      setOpen(true);
+      setState("idle");
+    };
+    window.addEventListener(OPEN_FEEDBACK_EVENT, show);
+    return () => window.removeEventListener(OPEN_FEEDBACK_EVENT, show);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,16 +67,18 @@ export function FeedbackWidget() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          setState("idle");
-        }}
-        className="float-bottom fixed right-3 z-40 flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-2 text-xs shadow-lg"
-      >
-        <MessageSquare size={14} aria-hidden /> {t("feedback.cta")}
-      </button>
+      {showFloatingFeedback(pathname, userType) && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            setState("idle");
+          }}
+          className="float-bottom fixed right-3 z-40 flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-2 text-xs shadow-lg"
+        >
+          <MessageSquare size={14} aria-hidden /> {t("feedback.cta")}
+        </button>
+      )}
       {open && (
         <div role="dialog" aria-labelledby="fb-title" className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center">
           <form onSubmit={submit} className="panel rise w-full max-w-md space-y-3 p-4">
