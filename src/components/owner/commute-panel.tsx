@@ -50,7 +50,25 @@ function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
   return r.reason.code === "historical_anchor" || r.headwayMin == null ? base : `${base} · ${t("commute.every", { n: r.headwayMin })}`;
 }
 
-export type FinishedPrompt = { what: string; onLog: () => void; onDismiss: () => void };
+export type FinishedPrompt = { arrivedAt: number; what: string; onLog: () => void; onDismiss: () => void };
+
+/** "Leave now" only in the last 30 s before leave-by. */
+export const LEAVE_NOW_MS = 30_000;
+
+/**
+ * Header of the pre-departure card: "Leave in m:ss" while leave-by is more
+ * than 30 s away, "Leave now" in the last 30 s, "You've missed this one,
+ * next: HH:MM" once it has passed.
+ */
+export function leaveHeader(t: T, rows: DepartureRow[], now: number): string {
+  const first = rows[0];
+  if (!first || !now) return t("commute.leaveNow");
+  const left = first.leaveAt - now;
+  if (left > LEAVE_NOW_MS) return t("commute.leaveIn", { time: countdown(left) });
+  if (left >= 0) return t("commute.leaveGo");
+  const later = rows.find((r) => r.leaveAt > now);
+  return later ? t("commute.missed", { time: clock(later.leaveAt) }) : t("commute.missedOnly");
+}
 
 export function CommutePanel({
   view,
@@ -61,36 +79,40 @@ export function CommutePanel({
   view: CommuteView | null;
   now: number;
   staleAt: number | null;
-  /** The trip is over (now > expected arrival + 15 min): "Arrived ~10:25? Log desk / Dismiss". */
+  /**
+   * The trip is over (now > expected arrival + 15 min, from `resolveTrip`):
+   * "Arrived ~10:25? Log desk / Dismiss" above the next trip's plan.
+   */
   finished?: FinishedPrompt | null;
 }) {
   const { t, locale } = useI18n();
   if (!view) return null;
   const { progress, leaveNow, rows } = view;
-  if (progress.state === "finished") {
-    if (!finished) return null;
-    return (
-      <section className="panel rise space-y-3 p-4" data-commute-state="finished">
-        <p className="led text-2xl font-bold">{t("commute.state.finished", { time: clock(progress.arrivedAt ?? progress.startAt) })}</p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn btn-primary" onClick={finished.onLog}>
-            {t("commute.finished.log", { what: finished.what })}
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={finished.onDismiss}>
-            {t("commute.finished.dismiss")}
-          </button>
-        </div>
-      </section>
-    );
-  }
-  if (!leaveNow) return <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
+  const prompt = finished ? (
+    <section className="panel rise space-y-3 p-4" data-commute-state="finished">
+      <p className="led text-2xl font-bold">{t("commute.state.finished", { time: clock(finished.arrivedAt) })}</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn btn-primary" onClick={finished.onLog}>
+          {t("commute.finished.log", { what: finished.what })}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={finished.onDismiss}>
+          {t("commute.finished.dismiss")}
+        </button>
+      </div>
+    </section>
+  ) : null;
+  // Finished: the view below is the next trip from now (a pre-departure plan).
+  const idle = progress.state === "idle" || progress.state === "finished";
+  // Waiting for the server to catch up with a just-finished trip: only the prompt.
+  if (finished && !idle) return prompt;
+  if (!leaveNow) return prompt ?? <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
   const first = rows[0];
-  const idle = progress.state === "idle";
-  const untilFirst = first ? (idle ? first.leaveAt : (first.rides[0]?.boardAt ?? first.leaveAt)) - now : 0;
+  const untilFirst = first ? (first.rides[0]?.boardAt ?? first.leaveAt) - now : 0;
   const ranged = rows.some((r) => r.ranged);
 
   return (
     <div className="space-y-3">
+      {prompt}
       {!idle && (
         <p className="text-sm text-accent">
           {t(`commute.state.${progress.state as Exclude<typeof progress.state, "idle" | "finished">}`, { time: clock(progress.startAt) })}
@@ -99,15 +121,16 @@ export function CommutePanel({
 
       <section aria-labelledby="leave-now" className="panel rise p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="leave-now" className="font-semibold">
-            {t(idle ? "commute.leaveNow" : "commute.continueNow")}
+          <h2 id="leave-now" className="font-semibold tabular" aria-live="off">
+            {idle ? leaveHeader(t, rows, now) : t("commute.continueNow")}
           </h2>
           {first && now > 0 && (
             <span className="tabular text-sm text-muted" aria-live="off">
-              {untilFirst > 0
-                ? t(idle ? "commute.leaveIn" : "commute.trainIn", { time: countdown(untilFirst) })
-                : t("commute.leaveGo")}
-              {idle && ` · ${t("commute.leaveBy", { time: clock(first.leaveAt) })}`}
+              {idle
+                ? t("commute.leaveBy", { time: clock(first.leaveAt) })
+                : untilFirst > 0
+                  ? t("commute.trainIn", { time: countdown(untilFirst) })
+                  : t("commute.leaveGo")}
             </span>
           )}
         </div>

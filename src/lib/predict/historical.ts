@@ -11,6 +11,19 @@ import { readingHeadway } from "./bands";
 import type { Confidence, Observation } from "./types";
 
 export const V0_DEFAULT_HEADWAY = 5;
+/** Another day's reading counts as "the same time of day" within this many minutes. */
+export const SAME_TIME_OF_DAY_MIN = 30;
+
+/**
+ * Confidence label for times from another day's reading (never "high":
+ * that is for today's trains). "Medium" only at the same time of day
+ * (≤ 30 min, same day type) or when the half hour is marked repeating;
+ * a reading from another day at a different time of day is "low".
+ */
+export function historicalAnchorConfidence(p: Pick<HistoricalProjection, "anchorGapMin" | "dayTypeMatch">, repeating = false): Confidence {
+  if (repeating) return "medium";
+  return p.anchorGapMin <= SAME_TIME_OF_DAY_MIN && p.dayTypeMatch ? "medium" : "low";
+}
 
 export type HistoricalProjection = {
   minsToNext: number;

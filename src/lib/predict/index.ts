@@ -19,7 +19,7 @@
 import { getLine, inService, type RideOverrides } from "../network";
 import { MINUTE, sgtClock, sgtDate } from "../time";
 import { bandHeadway, inUnstableWindow, readingHeadway } from "./bands";
-import { projectHistorical } from "./historical";
+import { historicalAnchorConfidence, projectHistorical } from "./historical";
 import { band30Key, learnBand, repeatArrivals, type BandStats } from "./learn";
 import { knownTrainsAt, type KnownTrain, type TrainSighting } from "./sightings";
 import { predictV1 } from "./v1";
@@ -275,8 +275,8 @@ export function predict(input: PredictInput): Prediction {
       if (projection && projection.anchorGapMin <= HISTORICAL_MAX_GAP_MIN) {
         const first = now + projection.minsToNext * MINUTE;
         const times = Array.from({ length: ARRIVALS_SHOWN }, (_, i) => first + i * projection.headway * MINUTE);
-        // Another day's clock times are never as good as today's reading.
-        const confidence: Confidence = projection.confidence === "high" ? "medium" : projection.confidence;
+        // Another day's clock times: medium only at the same time of day (this band isn't repeating), else low.
+        const confidence: Confidence = historicalAnchorConfidence(projection);
         return {
           kind: "times",
           arrivals: arrivalsFrom(times, now),
@@ -284,7 +284,10 @@ export function predict(input: PredictInput): Prediction {
           waitMin: { min: 0, max: round1(projection.headway) },
           confidence,
           basis: "historical",
-          reason: { code: "historical_anchor", params: { clock: sgtClock(projection.anchor.capturedAt), gap: projection.anchorGapMin } },
+          reason: {
+            code: "historical_anchor",
+            params: { clock: sgtClock(projection.anchor.capturedAt), date: sgtDate(projection.anchor.capturedAt), gap: projection.anchorGapMin },
+          },
           ...common,
           anchorAt: projection.anchor.capturedAt,
         };

@@ -4,9 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { LINES, PLATFORMS } from "../network";
 import { MINUTE, sgtClock, sgtInstant } from "../time";
 import { predict, type Observation } from "./index";
-import { directionView, gridArrivals, withLocalReading } from "./board-view";
+import { directionView, gridArrivals, lastSeenAt, withLocalReading } from "./board-view";
 import { buildReadingPost, fillNextSlot, clearSlot, emptySlots, localObservation, postReading, clampSeenAt } from "../readings/entry";
-import { DirectionTimes } from "@/components/board/direction-times";
+import { makeT } from "../i18n";
+import { formatDay, reasonText } from "../format";
+import { DirectionTimes, boardReasonText } from "@/components/board/direction-times";
+import { SeenToday } from "@/components/board/seen-today";
 
 // Synthetic fixtures only. 2026-11-03 is a Tuesday, 2026-11-07 a Saturday.
 const at = (date: string, clock: string) => sgtInstant(date, clock);
@@ -81,6 +84,60 @@ describe("station board view-model", () => {
     expect(html).toContain("≈10:29");
     expect(html).toContain("in 1 min");
     expect(html).toContain("From a board reading 3 min ago");
+  });
+
+  describe("v2.1.1 live check (Tue 10 Nov 12:10, a 10:21 reading on Mon 2 Nov, a train seen today at 10:14)", () => {
+    const NOV10 = "2026-11-10";
+    const monReading: Observation = { station: "EW17", line: "EWL", direction: "TO_EAST", capturedAt: at("2026-11-02", "10:21"), minutes: [3, 8], source: "owner", status: "approved" };
+    const ctx = { station: "EW17", line: "EWL", direction: "TO_EAST" };
+    const now = at(NOV10, "12:10");
+    const p = predict({ ...ctx, now, observations: [monReading] });
+    const en = makeT("en");
+
+    it("names the day of another day's reading (not 'another day')", () => {
+      expect(p.basis).toBe("historical");
+      expect(p.reason.params.date).toBe("2026-11-02");
+      const view = directionView(p, now, "EWL");
+      if (view.state === "closed") throw new Error("closed");
+      expect(boardReasonText(en, view.reason)).toBe("Based on a board reading at 10:21 on Mon 2 Nov, no board reading yet today");
+      expect(boardReasonText(makeT("zh-Hant"), view.reason, "zh-Hant")).toBe("根據11月2日（週一） 10:21 的顯示屏讀數，今天尚未有讀數");
+      // Planner / Home ride reasons too.
+      expect(reasonText(en, p.reason)).toBe("Based on a reading at 10:21 on Mon 2 Nov");
+      expect(formatDay("2026-11-02", "en")).toBe("Mon 2 Nov");
+    });
+
+    it("with trains seen today that are too old to anchor, says so instead of 'no board reading yet today'", () => {
+      const seen = [{ at: at(NOV10, "10:14") }];
+      const view = directionView(p, now, "EWL", lastSeenAt(seen, now));
+      if (view.state === "closed") throw new Error("closed");
+      expect(view.reason).toEqual({ code: "stale_today", seenAt: at(NOV10, "10:14"), basis: { code: "historical_anchor", clock: "10:21", date: "2026-11-02" } });
+      const text = boardReasonText(en, view.reason);
+      expect(text).toBe("Last train seen today at 10:14 is too long ago to use; estimated from a board reading at 10:21 on Mon 2 Nov");
+      expect(text).not.toContain("no board reading yet today");
+      // The typical-gap basis reads the same way.
+      const band = directionView(predict({ ...ctx, now, observations: [] }), now, "EWL", at(NOV10, "10:14"));
+      if (band.state === "closed") throw new Error("closed");
+      expect(boardReasonText(en, band.reason)).toMatch(/^Last train seen today at 10:14 is too long ago to use; estimated from the typical gap \(~\d+ min\)$/);
+      // Today's trains anchoring the card: no change.
+      const fresh = directionView(predict({ ...ctx, now, observations: [{ ...monReading, capturedAt: at(NOV10, "12:08") }] }), now, "EWL", at(NOV10, "10:14"));
+      if (fresh.state === "closed") throw new Error("closed");
+      expect(fresh.reason.code).toBe("reading_ago");
+      // A train seen later than now (heading here) doesn't count as "seen".
+      expect(lastSeenAt([{ at: now + MINUTE }], now)).toBeNull();
+    });
+
+    it("every ≈ time carries its ± with the unit (Next and Then)", () => {
+      const view = directionView(p, now, "EWL");
+      const html = renderToStaticMarkup(createElement(DirectionTimes, { view, now }));
+      const approx = html.match(/≈\d\d:\d\d/g) ?? [];
+      const pm = html.match(/>±\d+ min</g) ?? [];
+      expect(approx).toHaveLength(3);
+      expect(pm).toHaveLength(3);
+      expect(html).not.toMatch(/>±\d+</);
+      // Trains seen today: "(±1 min)".
+      const seen = renderToStaticMarkup(createElement(SeenToday, { trains: [{ at: at(NOV10, "10:14"), how: "passed", from: "EW15", spreadMin: 1 }] }));
+      expect(seen).toContain("(±1 min)");
+    });
   });
 
   it("shows closed outside service hours", () => {

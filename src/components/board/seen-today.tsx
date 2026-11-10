@@ -2,7 +2,7 @@
 import { ArrowRightLeft, LogIn, Monitor } from "lucide-react";
 import type { SeenTrain } from "@/lib/server/board";
 import { stationForCode } from "@/lib/network";
-import { clock } from "@/lib/format";
+import { clock, plusMinusText } from "@/lib/format";
 import { useI18n } from "../i18n";
 
 /** "Trains seen today" at one platform direction, newest first, with how we know each. */
@@ -28,7 +28,7 @@ export function SeenToday({ trains }: { trains: SeenTrain[] }) {
               <Icon size={14} aria-hidden className="text-muted" />
               <span className="text-muted">
                 {how}
-                {s.spreadMin > 0 ? ` (±${s.spreadMin})` : ""}
+                {s.spreadMin > 0 ? ` (${plusMinusText(t, s.spreadMin)})` : ""}
               </span>
             </li>
           );

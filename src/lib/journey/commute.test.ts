@@ -9,7 +9,9 @@ import {
   commuteProgress,
   commuteView,
   nextDepartures,
+  parseDismissed,
   parseJourneyChoice,
+  resolveTrip,
   serializeJourneyChoice,
 } from "./commute";
 
@@ -172,7 +174,9 @@ describe("stale 'on board' (H1, live 2026-11-10)", () => {
     expect(at1039.progress.state).toBe("on_board");
     const at1041 = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("10:41")), timed, at("10:41"));
     expect(at1041.progress).toMatchObject({ state: "finished", arrivedAt: at("10:25") });
-    expect(at1041.leaveNow).toBeNull();
+    // Under the prompt: the whole journey again from now (the next trip), never the old ride.
+    expect(at1041.leaveNow!.leaveAt).toBeGreaterThanOrEqual(at("10:41"));
+    expect(at1041.rows[0].rides).toHaveLength(2);
     const at1119 = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("11:19")), timed, at("11:19"));
     expect(at1119.progress.state).toBe("finished");
     expect(sgtClock(at1119.progress.arrivedAt!)).toBe("10:25");
@@ -186,5 +190,73 @@ describe("stale 'on board' (H1, live 2026-11-10)", () => {
     // 2-min change → TEL trains every 6 from 07:03 → 10:21; + 3 + 5 → 10:29.
     expect(sgtClock(view.leaveNow!.rides[0].boardAt)).toBe("10:21");
     expect(sgtClock(view.leaveNow!.arriveAt)).toBe("10:29");
+  });
+});
+
+describe("one next-step resolver (v2.1.1 live check, 10 Nov 12:10)", () => {
+  // Today: boarded EW17 TO_EAST 10:14, boarded TE17 TO_BAYSHORE 10:17, nothing after.
+  const NOV10 = "2026-11-10";
+  const t = (clock: string, date = NOV10) => at(clock, date);
+  const homeToOffice = { legs, fromPlace: "home", toPlace: "office" };
+  const officeToHome = { legs, fromPlace: "office", toPlace: "home" };
+  const taps = [
+    { kind: "board", station: "EW17", at: t("10:14") },
+    { kind: "board", station: "TE17", at: t("10:17") },
+  ];
+
+  it("at 12:10 (taps 113 min old) the trip is finished: 'Arrived ~10:25?', next = the desk", () => {
+    const trip = resolveTrip(homeToOffice, taps, t("12:10"));
+    expect(trip.progress).toMatchObject({ state: "finished", arrivedAt: t("10:25") });
+    expect(trip.next).toEqual({ kind: "desk", role: "end" });
+    expect(trip.lastTapAt).toBe(t("10:17"));
+    // Not "Got off · Shenton Way" (the step after the last tap).
+    expect(trip.next?.kind).not.toBe("alight");
+    // The card gets the same state: prompt + the whole journey planned from 12:10.
+    const view = commuteView("home_to_office", legs, trip.progress, timed, t("12:10"));
+    expect(view.progress).toMatchObject({ state: "finished", arrivedAt: t("10:25") });
+    expect(view.leaveNow!.leaveAt).toBeGreaterThanOrEqual(t("12:10"));
+    expect(view.rows.length).toBeGreaterThan(0);
+  });
+
+  it("still on board within the trip, finished from arrival + 15 min (10:40) on", () => {
+    expect(resolveTrip(homeToOffice, taps, t("10:19")).next).toMatchObject({ kind: "alight", station: "TE19", role: "step" });
+    expect(resolveTrip(homeToOffice, taps, t("10:39")).progress.state).toBe("on_board");
+    expect(resolveTrip(homeToOffice, taps, t("10:41")).next).toEqual({ kind: "desk", role: "end" });
+  });
+
+  it("after Dismiss, a new day or a new journey, the next step is the journey's first (Home door / Left desk)", () => {
+    const dismissed = resolveTrip(homeToOffice, taps, t("12:10"), { dismissedAt: t("10:17") });
+    expect(dismissed.progress.state).toBe("idle");
+    expect(dismissed.next).toEqual({ kind: "door", role: "start" });
+    expect(dismissed.stepIdx).toBe(0);
+    // Next day: yesterday's taps don't count.
+    expect(resolveTrip(homeToOffice, taps, t("08:00", "2026-11-11")).next).toEqual({ kind: "door", role: "start" });
+    // Office → Home (its own taps only): "Left desk".
+    expect(resolveTrip(officeToHome, [], t("18:00")).next).toEqual({ kind: "desk", role: "start" });
+  });
+
+  it("logging the desk ends the trip; a start tap begins a new one", () => {
+    const desk = [...taps, { kind: "desk", at: t("10:27") }];
+    expect(resolveTrip(homeToOffice, desk, t("10:30")).next).toEqual({ kind: "door", role: "start" });
+    const door = [...desk, { kind: "door", at: t("18:00") }];
+    expect(resolveTrip(homeToOffice, door, t("18:01")).next).toMatchObject({ kind: "at_platform", station: "EW17" });
+  });
+
+  it("a tap made after the trip finished starts a new trip; an abandoned platform tap is forgotten", () => {
+    const again = [...taps, { kind: "board", station: "EW17", at: t("12:20") }];
+    const trip = resolveTrip(homeToOffice, again, t("12:21"));
+    expect(trip.taps).toHaveLength(1);
+    expect(trip.progress.state).toBe("on_board");
+    expect(trip.next).toMatchObject({ kind: "alight", station: "EW16" });
+    const abandoned = resolveTrip(homeToOffice, [{ kind: "at_platform", station: "EW17", at: t("08:00") }], t("10:00"));
+    expect(abandoned.next).toEqual({ kind: "door", role: "start" });
+  });
+
+  it("honours the server's finished view while moving, and parses the Dismiss cookie", () => {
+    const trip = resolveTrip(homeToOffice, taps, t("10:30"), { serverFinishedAt: t("10:26") });
+    expect(trip.progress).toMatchObject({ state: "finished", arrivedAt: t("10:26") });
+    expect(trip.next).toEqual({ kind: "desk", role: "end" });
+    expect(parseDismissed(String(t("10:17")))).toBe(t("10:17"));
+    expect(parseDismissed("nope")).toBeNull();
   });
 });

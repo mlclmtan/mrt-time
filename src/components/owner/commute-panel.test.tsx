@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MINUTE, sgtInstant } from "@/lib/time";
+import { MINUTE, sgtClock, sgtInstant } from "@/lib/time";
+import { makeT } from "@/lib/i18n";
 import type { Leg, TrainSchedule, TrainSource } from "@/lib/journey/plan";
 import { commuteView } from "@/lib/journey/commute";
 import { predictionSource } from "@/lib/journey/source";
-import { CommutePanel } from "./commute-panel";
+import { CommutePanel, leaveHeader } from "./commute-panel";
 
 // Synthetic fixtures only (2026-11-03 is a Tuesday).
 const at = (clock: string) => sgtInstant("2026-11-03", clock);
@@ -25,16 +26,34 @@ describe("CommutePanel", () => {
     const now = at("18:00");
     const view = commuteView("office_to_home", legs, { state: "idle", fromLeg: 0, startAt: now }, timed, now);
     const html = renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} />);
-    expect(html).toContain("Leave now →");
     expect(html).toContain("Next departures");
     expect(html.match(/<li class="py-2">/g)).toHaveLength(6);
-    // 18:00 + walk 9 → first EWL 18:12 → leave by 18:03, i.e. in 3:00.
-    expect(html).toContain("Leave in 3:00");
+    // 18:00 + walk 9 → first EWL 18:12 → leave by 18:03, i.e. in 3:00: the header says so (not "Leave now").
+    expect(html).toMatch(/<h2 id="leave-now"[^>]*>Leave in 3:00<\/h2>/);
+    expect(html).not.toContain("Leave now");
     expect(html).toContain("Leave by 18:03");
     expect(html).toContain("18:12");
     expect(html).toContain("From a board reading 12 min ago");
     expect(html).toContain("Door 3-2");
     expect(html).not.toContain("Clock times shift");
+  });
+
+  it("header: 'Leave in m:ss' while leave-by is > 30 s away, 'Leave now' in the last 30 s, then 'missed, next: HH:MM'", () => {
+    const now = at("18:00");
+    const view = commuteView("office_to_home", legs, { state: "idle", fromLeg: 0, startAt: now }, timed, now);
+    const { rows } = view;
+    const t = makeT("en");
+    expect(sgtClock(rows[0].leaveAt)).toBe("18:03");
+    expect(leaveHeader(t, rows, at("18:00"))).toBe("Leave in 3:00");
+    // The live-check case: 3:51 before leave-by reads "Leave in 3:51", never "Leave now".
+    expect(leaveHeader(t, rows, rows[0].leaveAt - (3 * 60 + 51) * 1000)).toBe("Leave in 3:51");
+    expect(leaveHeader(t, rows, rows[0].leaveAt - 31_000)).toBe("Leave in 0:31");
+    expect(leaveHeader(t, rows, rows[0].leaveAt - 30_000)).toBe("Leave now");
+    expect(leaveHeader(t, rows, rows[0].leaveAt)).toBe("Leave now");
+    expect(leaveHeader(t, rows, rows[0].leaveAt + 1000)).toBe(`You've missed this one, next: ${sgtClock(rows[1].leaveAt)}`);
+    // Rendered: the header follows the clock.
+    const html = renderToStaticMarkup(<CommutePanel view={view} now={rows[0].leaveAt + 5000} staleAt={null} />);
+    expect(html).toContain("You&#x27;ve missed this one, next: 18:08");
   });
 
   it("shows ranges inside the unstable window", () => {

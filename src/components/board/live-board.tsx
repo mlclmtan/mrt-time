@@ -4,7 +4,7 @@ import { AlertTriangle, Users } from "lucide-react";
 import type { Board, BoardDirection, BoardPlatform } from "@/lib/server/board";
 import type { CrowdLevel, LineAlerts } from "@/lib/server/lta";
 import type { Observation } from "@/lib/predict/types";
-import { directionView, withLocalReading } from "@/lib/predict/board-view";
+import { directionView, lastSeenAt, withLocalReading } from "@/lib/predict/board-view";
 import { myReadingFor, myReadings } from "@/lib/readings/entry";
 import { BUS_APP_URL } from "@/lib/push/disruptions";
 import { clock } from "@/lib/format";
@@ -186,7 +186,7 @@ function DirectionRow({
   const { track } = useAnalytics();
   const [voted, setVoted] = useState(false);
   const p = withLocalReading(direction.prediction, mine, { line: platform.line, direction: direction.key, station: platform.code, now });
-  const view = directionView(p, now, platform.line);
+  const view = directionView(p, now, platform.line, lastSeenAt(direction.seenToday, now));
   const viewed = useRef(false);
   useEffect(() => {
     if (viewed.current) return;

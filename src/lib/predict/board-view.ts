@@ -25,14 +25,20 @@ export type BoardArrival = {
   /** ± minutes on this train (null = exact). Same-day trains far from a known one widen. */
   plusMinus: number | null;
 };
+/** Why an estimate (not from today's trains) reads as it does. */
+export type EstimateBasis =
+  | { code: "repeats"; days: number }
+  /** `date`: the anchor's SGT day ("2026-11-02"), shown as "Mon 2 Nov". */
+  | { code: "historical_anchor"; clock: string; date?: string }
+  | { code: "typical_gap"; headway: number }
+  | { code: "unstable_gap"; headway: number };
 export type BoardReason =
   | { code: "reading_ago"; minutes: number }
   | { code: "boarded_ago"; minutes: number }
   | { code: "seen_elsewhere"; minutes: number; station: string }
-  | { code: "repeats"; days: number }
-  | { code: "historical_anchor"; clock: string }
-  | { code: "typical_gap"; headway: number }
-  | { code: "unstable_gap"; headway: number };
+  | EstimateBasis
+  /** Trains were seen here today but the last one is too old to place trains: "estimated from <basis>". */
+  | { code: "stale_today"; seenAt: number; basis: EstimateBasis };
 
 export type DirectionView =
   | { state: "closed" }
@@ -90,7 +96,27 @@ function extend(times: Timed[], headwayMin: number, now: number): Timed[] {
 const toArrival = (now: number) => (t: Timed): BoardArrival => ({ at: t.at, clock: sgtClock(t.at), inMin: Math.max(0, Math.floor((t.at - now) / MINUTE)), plusMinus: t.plusMinus });
 const withSpread = (pm: number | null) => (at: number): Timed => ({ at, plusMinus: pm });
 
-export function directionView(p: Prediction, now: number, line?: string): DirectionView {
+/**
+ * `lastSeenToday`: the latest train seen at this platform today (the
+ * "Trains seen today" list). When the card is NOT based on today's trains
+ * (too old to anchor), the reason says so instead of "no board reading yet
+ * today".
+ */
+export function directionView(p: Prediction, now: number, line?: string, lastSeenToday?: number | null): DirectionView {
+  const view = baseDirectionView(p, now, line);
+  if (view.state === "closed" || lastSeenToday == null || lastSeenToday > now) return view;
+  const r = view.reason;
+  if (r.code === "reading_ago" || r.code === "boarded_ago" || r.code === "seen_elsewhere" || r.code === "stale_today") return view;
+  return { ...view, reason: { code: "stale_today", seenAt: lastSeenToday, basis: r } };
+}
+
+/** Latest train seen today at or before now (the "Trains seen today" list), or null. */
+export function lastSeenAt(trains: readonly { at: number }[] | undefined, now: number): number | null {
+  const past = (trains ?? []).map((s) => s.at).filter((at) => at <= now);
+  return past.length ? Math.max(...past) : null;
+}
+
+function baseDirectionView(p: Prediction, now: number, line?: string): DirectionView {
   if (p.kind === "closed") return { state: "closed" };
   const headwayMin = p.headwayMin || 6;
   const base = { headwayMin, unstable: p.unstable };
@@ -124,7 +150,11 @@ export function directionView(p: Prediction, now: number, line?: string): Direct
       reason:
         p.reason.code === "repeats"
           ? { code: "repeats", days: Number(p.reason.params.days ?? 0) }
-          : { code: "historical_anchor", clock: String(p.reason.params.clock ?? "") },
+          : {
+              code: "historical_anchor",
+              clock: String(p.reason.params.clock ?? ""),
+              ...(typeof p.reason.params.date === "string" ? { date: p.reason.params.date } : {}),
+            },
     };
   }
   const pm = estimateSpread({ ...p, basis: "band" });

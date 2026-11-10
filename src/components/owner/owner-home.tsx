@@ -1,17 +1,21 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { journeySteps, nextStepIndex, type Step } from "@/lib/journey/steps";
+import type { Step } from "@/lib/journey/steps";
 import type { Leg } from "@/lib/journey/plan";
 import {
   JOURNEY_CHOICE_COOKIE,
   MANUAL_CHOICE_TTL_MS,
+  TRIP_DISMISSED_COOKIE,
   autoJourneyKey,
-  commuteProgress,
   journeyEnds,
+  placeKind,
+  resolveTrip,
   serializeJourneyChoice,
   type CommuteView,
   type JourneyChoice,
+  type NextStep,
+  type TapKind,
 } from "@/lib/journey/commute";
 import { clock } from "@/lib/format";
 import { getDirection, getPlatform, stationForCode, type LineCode } from "@/lib/network";
@@ -32,20 +36,19 @@ import { TripTimeline, kindLabel, type TimelineItem } from "./trip-timeline";
 
 type Journey = { key: string; name: string; fromPlace: string | null; toPlace?: string | null; legs: Leg[]; sheltered: boolean };
 export type Logged = TimelineItem & { journeyKey?: string | null; clientId?: string };
-type TapKind = "door" | "desk" | "at_platform" | "board" | "alight" | "tap_out" | "arrived";
 type Toast = { clientId: string; id: number | null; at: number; kind: TapKind; text: string; until: number; queued?: boolean };
 
 const POLL_MS = 60_000;
 /** "Wrong time?" in the toast moves the tap back this many minutes (shown as clock times). */
 const FIX_MINUTES = [1, 2, 5] as const;
-/** "home" → the home door, "office" → the desk (journey ends for commute stats). */
-const placeKind = (place: string | null | undefined): TapKind => (place === "home" ? "door" : place === "office" ? "desk" : "arrived");
 
-/** The journey-aware next step as a tap: the arrival step means the place you are going to. */
-export function nextTapKind(next: Step | undefined, finished: boolean, endKind: TapKind): TapKind | null {
-  if (finished) return endKind;
-  if (!next) return null;
-  return next.kind === "arrived" ? endKind : next.kind;
+/** Dict key for a tap: the desk reads "Left desk" when leaving, "At my desk" when arriving. */
+export function tapLabelKey(kind: TapKind, role: NextStep["role"] | "any" = "any"): DictKey {
+  if (kind === "board") return "boarding.boarded";
+  if (kind === "alight") return "boarding.gotOff";
+  if (kind === "desk" && role === "start") return "step.desk.start";
+  if (kind === "desk" && role === "end") return "step.desk.end";
+  return kindLabel(kind) as DictKey;
 }
 
 export function OwnerHome({
@@ -53,6 +56,7 @@ export function OwnerHome({
   initialKey,
   initialChoice,
   initialView,
+  initialDismissedAt = null,
   today,
   stations,
   remindersAvailable,
@@ -62,6 +66,8 @@ export function OwnerHome({
   initialKey?: string;
   initialChoice: JourneyChoice | null;
   initialView: CommuteView | null;
+  /** The trip whose "Arrived ~10:25?" was dismissed (its last tap), from the cookie. */
+  initialDismissedAt?: number | null;
   today: Logged[];
   stations: { slug: string; name: string }[];
   remindersAvailable: boolean;
@@ -79,25 +85,30 @@ export function OwnerHome({
   const [refresh, setRefresh] = useState(0);
   const [time, setTime] = useState<TimeChoice>(NOW_CHOICE);
   const [override, setOverride] = useState<PlatformChoice | null>(null);
-  /** "Arrived ~10:25?" dismissed for the trip whose last tap was at this time. */
-  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  /** "Arrived ~10:25?" dismissed for the trip whose last tap was at this time (also a cookie). */
+  const [dismissedAt, setDismissedAt] = useState<number | null>(initialDismissedAt);
   const journey = journeys.find((j) => j.key === key);
-  const steps = useMemo(() => (journey ? journeySteps(journey.legs) : []), [journey]);
   const mine = useMemo(() => logged.filter((e) => !e.journeyKey || e.journeyKey === key).sort((a, b) => a.at - b.at), [logged, key]);
-  const nextIdx = nextStepIndex(steps, mine);
-  const next = steps[nextIdx];
+  const shownView = view && view.journeyKey === key ? view : null;
 
-  // Where the owner is along the journey; minute-granular so the request key stays stable.
+  // The one resolver for "where am I / what's next" (button, card request, platform defaults).
+  // Minute-granular so the request key stays stable.
   const minute = Math.floor(now / MINUTE) * MINUTE;
-  const progress = useMemo(
-    () => (journey && minute ? commuteProgress(journey.legs, mine, minute) : (initialView?.progress ?? { state: "idle" as const, fromLeg: 0, startAt: 0 })),
-    [journey, mine, minute, initialView],
+  const serverFinishedAt = shownView?.progress.state === "finished" ? (shownView.progress.arrivedAt ?? null) : null;
+  const trip = useMemo(
+    () => (journey && minute ? resolveTrip(journey, mine, minute, { dismissedAt, serverFinishedAt }) : null),
+    [journey, mine, minute, dismissedAt, serverFinishedAt],
   );
-  // Moving: the rest of the trip is planned from the tap times (startAt), not from now.
-  const tapStart = progress.state !== "idle" && progress.state !== "at_platform" && progress.state !== "finished" ? progress.startAt : 0;
+  const steps: Step[] = trip?.steps ?? [];
+  const nextIdx = trip?.stepIdx ?? 0;
+  const progress = trip?.progress ?? initialView?.progress ?? { state: "idle" as const, fromLeg: 0, startAt: 0 };
+  // Moving / finished: planned from the tap times (startAt), not from now.
+  const tapStart = progress.state === "on_board" || progress.state === "between" || progress.state === "finished" ? progress.startAt : 0;
   const requestKey = `${key}|${progress.fromLeg}|${progress.state}|${tapStart}`;
   const servedKey = useRef(
-    initialView ? `${initialView.journeyKey}|${initialView.progress.fromLeg}|${initialView.progress.state}|${initialView.progress.state === "on_board" || initialView.progress.state === "between" ? initialView.progress.startAt : 0}` : "",
+    initialView
+      ? `${initialView.journeyKey}|${initialView.progress.fromLeg}|${initialView.progress.state}|${["on_board", "between", "finished"].includes(initialView.progress.state) ? initialView.progress.startAt : 0}`
+      : "",
   );
 
   const queue = useTapQueue(useCallback(() => setRefresh((n) => n + 1), []));
@@ -193,11 +204,18 @@ export function OwnerHome({
 
   const startKind = placeKind(journey?.fromPlace);
   const endKind = placeKind(journey?.toPlace);
-  const shownView = view && view.journeyKey === key ? view : null;
-  const lastTapAt = mine.at(-1)?.at ?? 0;
-  const finished = shownView?.progress.state === "finished" && dismissedAt !== lastTapAt;
-  const primary = nextTapKind(next, shownView?.progress.state === "finished", endKind);
-  const label = (kind: TapKind) => t(kind === "board" ? "boarding.boarded" : kind === "alight" ? "boarding.gotOff" : (kindLabel(kind) as DictKey));
+  const next = trip?.next ?? null;
+  const primary: TapKind | null = next?.kind ?? null;
+  const finishedAt = progress.state === "finished" ? (progress.arrivedAt ?? progress.startAt) : null;
+  const roleOf = (kind: TapKind): NextStep["role"] => (kind === startKind ? "start" : kind === endKind ? "end" : "step");
+  const label = (kind: TapKind, role: NextStep["role"] = roleOf(kind)) => t(tapLabelKey(kind, role));
+  /** Dismiss "Arrived ~10:25?": the next step becomes the journey's first (kept for today in a cookie). */
+  const dismiss = () => {
+    const last = trip?.lastTapAt;
+    if (last == null) return;
+    document.cookie = `${TRIP_DISMISSED_COOKIE}=${Math.round(last)}; max-age=${24 * 3600}; path=/; samesite=lax`;
+    setDismissedAt(last);
+  };
 
   async function log(kind: TapKind, opts: { at?: number; timeSource?: "now" | "chosen" } = {}) {
     const tapped = nowMs();
@@ -290,13 +308,20 @@ export function OwnerHome({
         the safe area, so it is never hidden under them. Saves at the chosen
         time (Now by default) on the first tap.
       */}
-      {primary && (
-        <div className="next-step-dock sticky z-30" data-next-step={primary}>
-          <button type="button" onClick={() => void log(primary)} className="btn btn-primary min-h-16 w-full text-xl shadow-lg ring-4 ring-led/30">
-            {t("owner.nextStep", {
-              step: label(primary) + (primaryStation ? ` · ${stationForCode(primaryStation)?.name[locale] ?? primaryStation}` : ""),
-            })}
+      {primary && next && (
+        <div className="next-step-dock sticky z-30 flex gap-2" data-next-step={primary} data-trip-state={progress.state}>
+          <button type="button" onClick={() => void log(primary)} className="btn btn-primary min-h-16 flex-1 text-xl shadow-lg ring-4 ring-led/30">
+            {finishedAt != null
+              ? `${t("commute.state.finished", { time: clock(finishedAt) })} · ${t("commute.finished.log", { what: label(primary, next.role) })}`
+              : t("owner.nextStep", {
+                  step: label(primary, next.role) + (primaryStation ? ` · ${stationForCode(primaryStation)?.name[locale] ?? primaryStation}` : ""),
+                })}
           </button>
+          {finishedAt != null && (
+            <button type="button" onClick={dismiss} className="btn btn-secondary min-h-16 shadow-lg">
+              {t("commute.finished.dismiss")}
+            </button>
+          )}
         </div>
       )}
       {toast && (
@@ -327,11 +352,12 @@ export function OwnerHome({
         now={now}
         staleAt={staleAt}
         finished={
-          finished
+          finishedAt != null
             ? {
-                what: label(endKind),
+                arrivedAt: finishedAt,
+                what: label(endKind, "end"),
                 onLog: () => void log(endKind),
-                onDismiss: () => setDismissedAt(lastTapAt),
+                onDismiss: dismiss,
               }
             : null
         }

@@ -4,10 +4,10 @@
  * departures rendered as rows (leave → board leg 1 → transfer → board
  * leg 2 → arrive).
  */
-import { HOUR, MINUTE, sgtMinuteOfDay } from "../time";
+import { HOUR, MINUTE, sgtDate, sgtMinuteOfDay } from "../time";
 import type { Confidence } from "../predict/types";
 import { PLATFORMS } from "../network/data";
-import { journeySteps, nextStepIndex, JOURNEY_SWITCH_HOUR } from "./steps";
+import { journeySteps, nextStepIndex, JOURNEY_SWITCH_HOUR, type Step } from "./steps";
 import {
   legRideMin,
   planForward,
@@ -81,6 +81,7 @@ export type CommuteProgress = {
    * When the remaining trip starts, from the tap times — never "now" once
    * moving: the end of the current ride (boarded + ride minutes), or the
    * moment you got off / tapped out. On the platform: now (still waiting).
+   * "finished": the expected arrival.
    */
   startAt: number;
   /** "finished" only: when we expected you to arrive. */
@@ -88,35 +89,159 @@ export type CommuteProgress = {
 };
 type Tap = { kind: string; station?: string | null; at: number };
 
+/** Minutes of the remaining legs with no waits (walks, changes, rides). */
+function legsMinutes(legs: Leg[]) {
+  return legs.reduce((sum, l) => sum + (l.kind === "ride" ? legRideMin(l) : l.min), 0);
+}
+
+/**
+ * Where the owner is along ONE trip, from that trip's taps (see
+ * `resolveTrip` for which taps belong to the current trip). Moving (on
+ * board, got off, tapped out) and now past the expected arrival (tap times
+ * + the remaining walks / changes / rides) + 15 min → "finished"
+ * ("Arrived ~10:25?"), however old the taps are. On the platform with no
+ * tap for 90 min → idle (the trip was abandoned).
+ */
 export function commuteProgress(legs: Leg[], taps: Tap[], now: number): CommuteProgress {
   const idle: CommuteProgress = { state: "idle", fromLeg: 0, startAt: now };
   const sorted = taps.filter((e) => e.at <= now + MINUTE).sort((a, b) => a.at - b.at);
   const latest = sorted.at(-1);
-  if (!latest || now - latest.at > PROGRESS_STALE_MS) return idle;
+  if (!latest) return idle;
   const steps = journeySteps(legs);
   const idx = nextStepIndex(steps, sorted);
   if (idx === 0) return idle;
   const done = steps[idx - 1];
   const rideAt = legs.flatMap((l, i) => (l.kind === "ride" ? [i] : []));
   const ride = rideAt[Math.floor((idx - 1) / 3)];
+  const lastOf = (kind: string) => [...sorted].reverse().find((e) => e.kind === kind)?.at ?? latest.at;
+  const moving = (fromLeg: number, startAt: number, state: "on_board" | "between"): CommuteProgress => {
+    const arrivedAt = startAt + legsMinutes(legs.slice(fromLeg)) * MINUTE;
+    return now > arrivedAt + FINISHED_AFTER_MS ? { state: "finished", fromLeg, startAt: arrivedAt, arrivedAt } : { state, fromLeg, startAt };
+  };
   switch (done.kind) {
     case "at_platform":
-      return { state: "at_platform", fromLeg: ride, startAt: now };
+      return now - latest.at > PROGRESS_STALE_MS ? idle : { state: "at_platform", fromLeg: ride, startAt: now };
     case "board": {
       // The rest of the trip starts when this ride ends: boarded + ride minutes (not now).
       const leg = legs[ride];
-      const boardedAt = [...sorted].reverse().find((e) => e.kind === "board")?.at ?? latest.at;
-      const rideEnd = leg.kind === "ride" ? boardedAt + legRideMin(leg) * MINUTE : boardedAt;
-      return { state: "on_board", fromLeg: ride + 1, startAt: rideEnd };
+      const boardedAt = lastOf("board");
+      return moving(ride + 1, leg.kind === "ride" ? boardedAt + legRideMin(leg) * MINUTE : boardedAt, "on_board");
     }
     case "alight":
-      return { state: "between", fromLeg: ride + 1, startAt: [...sorted].reverse().find((e) => e.kind === "alight")?.at ?? latest.at };
+      return moving(ride + 1, lastOf("alight"), "between");
     case "tap_out":
-      return { state: "between", fromLeg: (rideAt.at(-1) ?? legs.length - 1) + 1, startAt: [...sorted].reverse().find((e) => e.kind === "tap_out")?.at ?? latest.at };
+      return moving((rideAt.at(-1) ?? legs.length - 1) + 1, lastOf("tap_out"), "between");
     default:
       // Arrived: the trip is over, so show the whole journey again.
       return idle;
   }
+}
+
+/* ---------- The one next-step resolver (button, card, /add) ---------- */
+
+/** What the owner can tap: journey steps plus the two ends ("door" = home, "desk" = office). */
+export type TapKind = "door" | "desk" | "at_platform" | "board" | "alight" | "tap_out" | "arrived";
+/** "home" → the home door, "office" → the desk (journey ends for commute stats). */
+export const placeKind = (place: string | null | undefined): TapKind => (place === "home" ? "door" : place === "office" ? "desk" : "arrived");
+/** Cookie "unixMs": the last tap of the trip whose "Arrived ~10:25?" was dismissed. */
+export const TRIP_DISMISSED_COOKIE = "mrt_trip_dismissed";
+export function parseDismissed(value: string | null | undefined): number | null {
+  return /^\d{10,14}$/.test(value ?? "") ? Number(value) : null;
+}
+
+export type NextStep = {
+  kind: TapKind;
+  /** "start" = leaving (Home door / Left desk), "end" = got there (At my desk). */
+  role: "start" | "step" | "end";
+  station?: string;
+  line?: string;
+  direction?: string;
+};
+export type TripStatus = {
+  steps: Step[];
+  /** The current trip's taps (today, after the last finished / ended / dismissed trip). */
+  taps: Tap[];
+  /** Index into `steps` the next ride step is looked up from (0 for a new trip). */
+  stepIdx: number;
+  /** Where the owner is; "finished" → "Arrived ~10:25?". */
+  progress: CommuteProgress;
+  next: NextStep | null;
+  /** Latest tap of the current trip (what Dismiss remembers). */
+  lastTapAt: number | null;
+};
+type JourneyLike = { legs: Leg[]; fromPlace?: string | null; toPlace?: string | null };
+
+/**
+ * The single place that turns today's taps into "where am I / what's
+ * next" — the Home button, the trip card's request, the server-rendered
+ * first view and /add's default platform all go through it.
+ *  - Only today's taps (SGT) after `dismissedAt` count.
+ *  - A trip ends at the end-place tap (desk / door / arrived); a start-place
+ *    tap begins a new one; a tap made after the trip was already finished
+ *    (or abandoned on the platform) begins a new one too.
+ *  - Finished (now > expected arrival + 15 min, same rule as `commuteView`)
+ *    → next is the end place ("Arrived ~10:25? · Log At my desk").
+ *  - No trip under way (new day, new journey, ended, dismissed, abandoned)
+ *    → next is the journey's first step (Home door / Left desk).
+ * `serverFinishedAt`: the server's view already says finished (it planned
+ * the rest with real train times) — honoured while the trip is moving.
+ */
+export function resolveTrip(
+  journey: JourneyLike,
+  taps: Tap[],
+  now: number,
+  opts: { dismissedAt?: number | null; serverFinishedAt?: number | null } = {},
+): TripStatus {
+  const steps = journeySteps(journey.legs);
+  const startKind = placeKind(journey.fromPlace);
+  const endKind = placeKind(journey.toPlace);
+  const day = sgtDate(now);
+  const sorted = taps
+    .filter((e) => e.at <= now + MINUTE && sgtDate(e.at) === day && (opts.dismissedAt == null || e.at > opts.dismissedAt))
+    .sort((a, b) => a.at - b.at);
+  let trip: Tap[] = [];
+  for (const e of sorted) {
+    if (e.kind === endKind || e.kind === "arrived") trip = [];
+    else if (e.kind === startKind) trip = [e];
+    else {
+      if (trip.length && isOver(journey.legs, trip, e.at)) trip = [];
+      trip.push(e);
+    }
+  }
+  let progress = commuteProgress(journey.legs, trip, now);
+  // Abandoned (no tap for 90 min, not on a train): no trip under way.
+  if (trip.length && progress.state !== "finished" && isOver(journey.legs, trip, now)) {
+    trip = [];
+    progress = commuteProgress(journey.legs, trip, now);
+  }
+  if ((progress.state === "on_board" || progress.state === "between") && opts.serverFinishedAt != null)
+    progress = { ...progress, state: "finished", startAt: opts.serverFinishedAt, arrivedAt: opts.serverFinishedAt };
+  const lastTapAt = trip.at(-1)?.at ?? null;
+  const fresh = (): NextStep | null =>
+    startKind !== "arrived" ? { kind: startKind, role: "start" } : steps[0] ? { ...stepOf(steps[0]), role: "step" } : null;
+
+  if (progress.state === "finished") return { steps, taps: trip, stepIdx: 0, progress, next: { kind: endKind, role: "end" }, lastTapAt };
+  const stepIdx = nextStepIndex(steps, trip);
+  const started = trip.some((e) => e.kind !== startKind);
+  const step = steps[stepIdx];
+  const next: NextStep | null = !started
+    ? trip.length
+      ? step && { ...stepOf(step), role: "step" } // left the door: the first platform
+      : fresh()
+    : !step || step.kind === "arrived"
+      ? { kind: endKind, role: "end" }
+      : { ...stepOf(step), role: "step" };
+  return { steps, taps: trip, stepIdx, progress, next: next ?? null, lastTapAt };
+}
+
+function stepOf(s: Step): Omit<NextStep, "role"> {
+  return { kind: s.kind, ...(s.station ? { station: s.station } : {}), ...(s.line ? { line: s.line } : {}), ...(s.direction ? { direction: s.direction } : {}) };
+}
+
+/** The trip in `taps` is over at `at`: finished, or abandoned on the platform (90 min, no tap). */
+function isOver(legs: Leg[], taps: Tap[], at: number) {
+  const p = commuteProgress(legs, taps, at);
+  return p.state === "finished" || (p.state !== "on_board" && p.state !== "between" && at - (taps.at(-1)?.at ?? at) > PROGRESS_STALE_MS);
 }
 
 /* ---------- Departure rows ---------- */
@@ -193,7 +318,7 @@ export type CommuteView = {
   journeyKey: string;
   progress: CommuteProgress;
   generatedAt: number;
-  /** "Leave now →": the trip if you set off at progress.startAt. */
+  /** The trip if you set off at progress.startAt (finished: the next trip, from now). */
   leaveNow: DepartureRow | null;
   rows: DepartureRow[];
 };
@@ -202,20 +327,30 @@ export type CommuteView = {
  * Idle / on the platform: plan from now. Moving (on board, got off, tapped
  * out): plan the rest from the tap times, never re-plan the ride from now —
  * and once now is past the expected arrival + 15 min the trip is finished
- * ("Arrived ~10:25? Log desk / dismiss"), nothing left to plan.
+ * ("Arrived ~10:25? Log desk / dismiss"). Finished: the whole journey again
+ * from now underneath the prompt (the next trip's plan).
  */
 export function commuteView(journeyKey: string, legs: Leg[], progress: CommuteProgress, source: TrainSource, now: number): CommuteView {
+  const finished = (arrivedAt: number): CommuteView => {
+    const fresh = legs.length ? departureRow(planForward(legs, now, source)) : null;
+    return {
+      journeyKey,
+      progress: { ...progress, state: "finished", startAt: arrivedAt, arrivedAt },
+      generatedAt: now,
+      leaveNow: fresh,
+      rows: fresh ? nextDepartures(legs, now, source) : [],
+    };
+  };
+  if (progress.state === "finished") return finished(progress.arrivedAt ?? progress.startAt);
   const remaining = legs.slice(Math.min(Math.max(0, progress.fromLeg), legs.length));
   const moving = progress.state === "on_board" || progress.state === "between";
   if (!remaining.length) {
-    if (moving && now > progress.startAt + FINISHED_AFTER_MS)
-      return { journeyKey, progress: { ...progress, state: "finished", arrivedAt: progress.startAt }, generatedAt: now, leaveNow: null, rows: [] };
+    if (moving && now > progress.startAt + FINISHED_AFTER_MS) return finished(progress.startAt);
     return { journeyKey, progress, generatedAt: now, leaveNow: null, rows: [] };
   }
   const start = moving ? progress.startAt : Math.max(now, progress.startAt);
   const leaveNow = departureRow(planForward(remaining, start, source));
-  if (moving && now > leaveNow.arriveAt + FINISHED_AFTER_MS)
-    return { journeyKey, progress: { ...progress, state: "finished", arrivedAt: leaveNow.arriveAt }, generatedAt: now, leaveNow: null, rows: [] };
+  if (moving && now > leaveNow.arriveAt + FINISHED_AFTER_MS) return finished(leaveNow.arriveAt);
   return {
     journeyKey,
     progress,

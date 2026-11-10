@@ -1,6 +1,6 @@
 {
   "name": "mrt-time",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "MRT Time — Singapore MRT arrival predictions from timed platform-board readings, door-to-door commute planner and analytics practice product.",
   "scripts": {

@@ -5,8 +5,8 @@ import { pageMetadata } from "@/lib/seo";
 import { dbConfigured } from "@/lib/db";
 import { ownerJourneys } from "@/lib/server/journeys";
 import { todaysEvents } from "@/lib/server/trips";
-import { autoJourneyKey } from "@/lib/journey/commute";
-import { journeySteps, nextStepIndex } from "@/lib/journey/steps";
+import { cookies } from "next/headers";
+import { TRIP_DISMISSED_COOKIE, autoJourneyKey, parseDismissed, resolveTrip } from "@/lib/journey/commute";
 import { nowMs } from "@/lib/time";
 import { AddReading } from "@/components/add-reading";
 
@@ -23,9 +23,11 @@ async function ownerDefault(userId: string): Promise<{ station: string; directio
   const key = autoJourneyKey(journeys, now, null);
   const journey = journeys.find((j) => j.key === key);
   if (!journey) return null;
-  const steps = journeySteps(journey.legs);
   const mine = today.filter((e) => !e.journeyKey || e.journeyKey === key);
-  const next = steps.slice(nextStepIndex(steps, mine)).find((s) => (s.kind === "at_platform" || s.kind === "board") && s.station && s.direction);
+  // Same resolver as Home: a finished / dismissed trip means the next trip's first platform.
+  const dismissedAt = parseDismissed((await cookies()).get(TRIP_DISMISSED_COOKIE)?.value);
+  const trip = resolveTrip(journey, mine, now, { dismissedAt });
+  const next = trip.steps.slice(trip.stepIdx).find((s) => (s.kind === "at_platform" || s.kind === "board") && s.station && s.direction);
   return next?.station && next.direction ? { station: next.station, direction: next.direction } : null;
 }
 

@@ -3,11 +3,10 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { sgtInstant } from "@/lib/time";
 import type { Leg, TrainSource } from "@/lib/journey/plan";
-import { commuteProgress, commuteView } from "@/lib/journey/commute";
-import { OwnerHome, nextTapKind } from "./owner-home";
+import { commuteView, resolveTrip } from "@/lib/journey/commute";
+import { OwnerHome } from "./owner-home";
 import { CommutePanel } from "./commute-panel";
 import { TimeChips } from "../boarding/time-chips";
-import { showFloatingFeedback } from "../voc/feedback-widget";
 
 // Synthetic fixtures only (2026-11-10 is a Tuesday).
 const at = (clock: string) => sgtInstant("2026-11-10", clock);
@@ -25,13 +24,25 @@ const taps = [
   { id: 1, kind: "board", at: at("10:14"), station: "EW17", line: "EWL", direction: "TO_EAST", journeyKey: "home_to_office" },
   { id: 2, kind: "board", at: at("10:17"), station: "TE17", line: "TEL", direction: "TO_BAYSHORE", journeyKey: "home_to_office" },
 ];
-const render = (now: number, today = taps) =>
+/** Visible text of the docked next-step buttons. */
+const dockText = (html: string) => {
+  const start = html.indexOf('<div class="next-step-dock');
+  const end = html.indexOf("</div>", start);
+  return html
+    .slice(start, end)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+/** Like the server page: the same resolver picks the progress behind the first view. */
+const render = (now: number, today: typeof taps = taps, dismissedAt: number | null = null) =>
   renderToStaticMarkup(
     <OwnerHome
       journeys={[journey]}
       initialKey="home_to_office"
       initialChoice={null}
-      initialView={commuteView("home_to_office", legs, commuteProgress(legs, today, now), timed, now)}
+      initialView={commuteView("home_to_office", legs, resolveTrip(journey, today, now, { dismissedAt }).progress, timed, now)}
+      initialDismissedAt={dismissedAt}
       today={today}
       stations={[]}
       remindersAvailable={false}
@@ -45,10 +56,14 @@ describe("owner Home layout (H2) and next step (F10)", () => {
     const button = html.indexOf("data-next-step=");
     expect(button).toBeGreaterThan(0);
     // Before the train times, the logging panel and everything else.
-    expect(button).toBeLessThan(html.indexOf("Leave now"));
+    expect(button).toBeLessThan(html.indexOf('id="leave-now"'));
     expect(button).toBeLessThan(html.indexOf('aria-label="Log a step"'));
-    expect(html).toMatch(/class="next-step-dock sticky z-30" data-next-step="at_platform"/);
-    expect(html).toContain("Next: At platform · Tiong Bahru");
+    // A new trip starts at the journey's first step: the home door.
+    expect(html).toMatch(/class="next-step-dock sticky z-30[^"]*" data-next-step="door"/);
+    expect(dockText(html)).toBe("Next: Home door");
+    // Left the door: the first platform.
+    const door = [{ id: 3, kind: "door", at: at("08:55"), station: null, line: null, direction: null, journeyKey: "home_to_office" }];
+    expect(dockText(render(at("09:00"), door as never))).toBe("Next: At platform · Tiong Bahru");
     // Owner pages are masked for Clarity.
     expect(html).toContain('data-clarity-mask="True"');
   });
@@ -67,29 +82,55 @@ describe("owner Home layout (H2) and next step (F10)", () => {
     expect(buttonBottom - 64).toBeGreaterThan(0);
   });
 
-  it("the floating Feedback button is hidden on owner Home only (still in the footer and Settings)", () => {
-    expect(showFloatingFeedback("/", "owner")).toBe(false);
-    expect(showFloatingFeedback("/zh-Hant", "owner")).toBe(false);
-    expect(showFloatingFeedback("/plan", "owner")).toBe(true);
-    expect(showFloatingFeedback("/", "visitor")).toBe(true);
+  it("no floating Feedback button anywhere (v2.1.1); Feedback stays in the footer and Settings", () => {
+    const widget = readFileSync(new URL("../voc/feedback-widget.tsx", import.meta.url), "utf8");
+    expect(widget).not.toMatch(/className="[^"]*\bfixed right-/);
+    expect(widget).not.toContain("float-bottom");
+    const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+    expect(css).not.toContain(".float-bottom");
     const shell = readFileSync(new URL("../shell.tsx", import.meta.url), "utf8");
     expect(shell).toContain("<FeedbackLink");
     const settings = readFileSync(new URL("../../app/settings/page.tsx", import.meta.url), "utf8");
     expect(settings).toContain("<FeedbackLink");
+    // The dialog the links open is still mounted site-wide.
+    const layout = readFileSync(new URL("../../app/layout.tsx", import.meta.url), "utf8");
+    expect(layout).toContain("<FeedbackWidget");
   });
 
-  it("H1 at 11:19: no 'On board', the next step is the desk and Home asks 'Arrived ~10:25?'", () => {
-    const html = render(at("11:19"));
-    expect(html).not.toContain("On board");
-    expect(html).toContain('data-next-step="desk"');
-    expect(nextTapKind(undefined, true, "desk")).toBe("desk");
-    const view = commuteView("home_to_office", legs, commuteProgress(legs, taps, at("11:19")), timed, at("11:19"));
-    const panel = renderToStaticMarkup(<CommutePanel view={view} now={at("11:19")} staleAt={null} finished={{ what: "At my desk", onLog: () => {}, onDismiss: () => {} }} />);
-    expect(panel).toContain("Arrived ~10:25?");
-    expect(panel).toContain("Log At my desk");
-    expect(panel).toContain("Dismiss");
-    // Dismissed: nothing left to show.
-    expect(renderToStaticMarkup(<CommutePanel view={view} now={at("11:19")} staleAt={null} finished={null} />)).toBe("");
+  for (const clock of ["11:19", "12:10"]) {
+    it(`H1 at ${clock} (taps 10:14 / 10:17): button and card both ask 'Arrived ~10:25?'`, () => {
+      const html = render(at(clock));
+      expect(html).not.toContain("On board");
+      expect(html).not.toContain("Got off · Shenton Way");
+      // The big button: same finished-trip state as the card.
+      expect(html).toContain('data-next-step="desk" data-trip-state="finished"');
+      expect(dockText(html)).toBe("Arrived ~10:25? · Log At my desk Dismiss");
+      // The card: the prompt above a fresh pre-departure plan for the journey.
+      const card = html.slice(html.indexOf('data-commute-state="finished"'));
+      expect(card).toContain("Arrived ~10:25?");
+      expect(card).toContain("Log At my desk");
+      expect(card).toContain("Dismiss");
+      expect(card).toMatch(/<h2 id="leave-now"[^>]*>(Leave in \d+:\d\d|Leave now)<\/h2>/);
+      expect(card).toMatch(/Leave by \d\d:\d\d/);
+    });
+  }
+
+  it("after Dismiss at 12:10: the next step is the journey's first (Home door), no prompt", () => {
+    const html = render(at("12:10"), taps, at("10:17"));
+    expect(html).toContain('data-next-step="door" data-trip-state="idle"');
+    expect(dockText(html)).toBe("Next: Home door");
+    expect(html).not.toContain("Arrived ~10:25?");
+    expect(html).toMatch(/<h2 id="leave-now"[^>]*>Leave in \d+:\d\d<\/h2>/);
+  });
+
+  it("the card's prompt follows the resolver, and dismissing keeps the fresh plan", () => {
+    const now = at("12:10");
+    const view = commuteView("home_to_office", legs, resolveTrip(journey, taps, now).progress, timed, now);
+    const prompt = { arrivedAt: at("10:25"), what: "At my desk", onLog: () => {}, onDismiss: () => {} };
+    expect(renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} finished={prompt} />)).toContain("Arrived ~10:25?");
+    const dismissed = renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} finished={null} />);
+    expect(dismissed).not.toContain("Arrived");
+    expect(dismissed).toContain('id="leave-now"');
   });
 
   it("time chips read as clock times: 10:14 · 10:13 · 10:12 · 10:09 · Other time", () => {

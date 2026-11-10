@@ -1,8 +1,23 @@
 "use client";
-import type { DirectionView, BoardReason } from "@/lib/predict/board-view";
+import type { DirectionView, BoardReason, EstimateBasis } from "@/lib/predict/board-view";
 import type { T } from "@/lib/i18n";
 import { stationForCode } from "@/lib/network";
+import { clock, dayText, plusMinusText } from "@/lib/format";
 import { useI18n } from "../i18n";
+
+/** "a board reading at 10:21 on Mon 2 Nov" / "the typical gap (~6 min)" (after "estimated from"). */
+function basisText(t: T, b: EstimateBasis, locale: "en" | "zh-Hant"): string {
+  switch (b.code) {
+    case "historical_anchor":
+      return t("basis.historical", { clock: b.clock, day: dayText(t, b.date, locale) });
+    case "repeats":
+      return t("basis.repeats", { days: b.days });
+    case "typical_gap":
+      return t("basis.typical", { n: b.headway });
+    case "unstable_gap":
+      return t("basis.unstable", { n: b.headway });
+  }
+}
 
 export function boardReasonText(t: T, r: BoardReason, locale: "en" | "zh-Hant" = "en"): string {
   switch (r.code) {
@@ -15,24 +30,26 @@ export function boardReasonText(t: T, r: BoardReason, locale: "en" | "zh-Hant" =
     case "repeats":
       return t("reason.repeats", { days: r.days });
     case "historical_anchor":
-      return t("boardReason.historical", { clock: r.clock });
+      return t("boardReason.historical", { clock: r.clock, day: dayText(t, r.date, locale) });
     case "typical_gap":
       return t("boardReason.typical", { n: r.headway });
     case "unstable_gap":
       return t("boardReason.unstable", { n: r.headway });
+    case "stale_today":
+      return t("boardReason.staleToday", { time: clock(r.seenAt), basis: basisText(t, r.basis, locale) });
   }
 }
 
 /**
  * Next three trains as SGT clock times with a live countdown. Exact times
- * are solid; estimates read "≈10:24" (± band) with an "estimate" chip and
- * the plain reason. Never an interval on its own.
+ * are solid; every estimate reads "≈10:24 ±1 min" (each train its own ±,
+ * always with the unit) with an "estimate" chip and the plain reason.
+ * Never an interval on its own.
  */
 export function DirectionTimes({ view, now }: { view: DirectionView; now: number }) {
   const { t, locale } = useI18n();
   if (view.state === "closed") return <p className="mt-2 text-muted">{t("board.notRunning")}</p>;
   const est = view.state === "estimate";
-  // Each train has its own ±: exact near a known train, "≈ ±N" further away.
   const approx = (a: { plusMinus: number | null }) => (a.plusMinus != null ? "≈" : "");
   const inText = (at: number) => {
     const n = Math.max(0, Math.floor((at - now) / 60_000));
@@ -48,7 +65,7 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
             <div className={`led tabular text-4xl leading-none font-bold ${est ? "opacity-80" : ""}`}>
               {approx(first)}
               {first.clock}
-              {first.plusMinus != null && <span className="ml-1 text-base font-normal text-muted">±{first.plusMinus}</span>}
+              {first.plusMinus != null && <span className="ml-1 text-base font-normal text-muted">{plusMinusText(t, first.plusMinus)}</span>}
             </div>
             <div className="tabular mt-1 text-sm">{inText(first.at)}</div>
           </div>
@@ -59,7 +76,7 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
             <div className={`led tabular text-2xl leading-none ${a.plusMinus != null ? "opacity-70" : "opacity-90"}`}>
               {approx(a)}
               {a.clock}
-              {a.plusMinus != null && a.plusMinus !== first?.plusMinus && <span className="ml-1 text-xs font-normal text-muted">±{a.plusMinus}</span>}
+              {a.plusMinus != null && <span className="ml-1 text-xs font-normal text-muted">{plusMinusText(t, a.plusMinus)}</span>}
             </div>
             <div className="tabular mt-1 text-xs text-muted">{inText(a.at)}</div>
           </div>

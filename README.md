@@ -2,7 +2,7 @@
 
 Singapore MRT next-train times predicted from **timed platform-board readings** (there is no operator live-arrival feed), a **door-to-door commute planner** with transfers, and a **real marketing/analytics practice product** (GA4 + GTM, Meta Pixel + CAPI, Clarity, KOL and campaign tracking, experiments, SEO).
 
-Live at <https://mrt.91208274.xyz> · v2.1.0 · spec: [SPEC.md](SPEC.md)
+Live at <https://mrt.91208274.xyz> · v2.1.1 · spec: [SPEC.md](SPEC.md)
 
 > This repo is public. Personal data (home/office, owner email, real trip logs and readings) lives only in the database, seeded from the gitignored `private/seed.json`. Tests use synthetic fixtures only.
 

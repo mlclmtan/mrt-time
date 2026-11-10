@@ -3,6 +3,7 @@ import { MINUTE, sgtClock, sgtInstant } from "../time";
 import { BANDS, bandHeadway, inUnstableWindow, predict, projectHistorical, timeBand } from ".";
 import type { Observation } from ".";
 import { scorePrediction, summariseAccuracy } from "./accuracy";
+import { historicalAnchorConfidence } from "./historical";
 import { MemoryRateLimiter, PUBLIC_IP_LIMIT, PUBLIC_READING_LIMIT, autoApprovalStatus, hitPublicLimits, rateLimitKey } from "./readings";
 
 // Synthetic fixtures only. 2026-11-02 is a Monday; 2026-11-07 a Saturday.
@@ -159,6 +160,29 @@ describe("historical clock-time repeat (v0 port)", () => {
     expect(p.confidence).toBe("medium"); // capped below same-day
     expect(sgtClock(p.arrivals[0].at)).toBe("14:23");
     expect(sgtClock(p.arrivals[1].at)).toBe("14:28");
+  });
+
+  it("another day at a different time of day is Low unless the band repeats (v2.1.1 live check)", () => {
+    // Mon 2 Nov 10:21 reading; Tue 10 Nov.
+    const obs = [reading(MON, "10:21", [3, 8])];
+    const late = predict({ ...base, now: at("2026-11-10", "12:10"), observations: obs });
+    expect(late.basis).toBe("historical");
+    expect(late.reason.code).toBe("historical_anchor");
+    expect(late.reason.params.gap).toBe(109);
+    expect(late.confidence).toBe("low");
+    // Same time of day (≤ 30 min, same day type): Medium.
+    const same = predict({ ...base, now: at("2026-11-10", "10:40"), observations: obs });
+    expect(same.basis).toBe("historical");
+    expect(same.confidence).toBe("medium");
+    // A weekday reading on a Saturday at the same clock time: different day type → Low.
+    const sat = predict({ ...base, now: at("2026-11-07", "10:40"), observations: obs });
+    expect(sat.confidence).toBe("low");
+    // The rule itself: a repeating band keeps Medium whatever the gap.
+    expect(historicalAnchorConfidence({ anchorGapMin: 109, dayTypeMatch: true })).toBe("low");
+    expect(historicalAnchorConfidence({ anchorGapMin: 109, dayTypeMatch: true }, true)).toBe("medium");
+    expect(historicalAnchorConfidence({ anchorGapMin: 30, dayTypeMatch: true })).toBe("medium");
+    // The v1 kill-switch engine follows the same rule.
+    expect(predict({ ...base, now: at("2026-11-10", "12:10"), observations: obs, engine: "v1" }).confidence).toBe("low");
   });
 
   it("prefers the same day-type and falls back to all readings", () => {

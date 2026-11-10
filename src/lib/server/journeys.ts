@@ -118,7 +118,8 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
  * moment ago becomes the same-day anchor immediately.
  */
 export async function commuteFor(journey: OwnerJourney, progress: CommuteProgress, now: number): Promise<CommuteView> {
-  const rides = ridesOf(journey.legs.slice(progress.fromLeg));
+  // Finished (or about to be): the next trip is planned over the whole journey.
+  const rides = ridesOf(progress.state === "finished" || progress.state === "on_board" || progress.state === "between" ? journey.legs : journey.legs.slice(progress.fromLeg));
   const data = await predictionData([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => null);
   const source = data ? sourceFor(data) : predictionSource([], undefined);
   return commuteView(journey.key, journey.legs, progress, source, now);

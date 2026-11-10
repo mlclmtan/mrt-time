@@ -16,7 +16,7 @@
 import { getLine, inService } from "../network";
 import { MINUTE, sgtClock, sgtDate } from "../time";
 import { bandHeadway, inUnstableWindow, readingHeadway } from "./bands";
-import { projectHistorical } from "./historical";
+import { historicalAnchorConfidence, projectHistorical } from "./historical";
 import type { Arrival, Confidence, Observation, Prediction, UnstableWindow } from "./types";
 
 const SAME_DAY_WINDOW_MIN = 90;
@@ -133,8 +133,8 @@ export function predictV1(input: PredictV1Input): Prediction {
         { length: ARRIVALS_SHOWN },
         (_, i) => first + i * projection.headway * MINUTE,
       );
-      // Another day's clock times are never as good as today's reading.
-      const confidence: Confidence = projection.confidence === "high" ? "medium" : projection.confidence;
+      // Another day's clock times: medium only at the same time of day, else low.
+      const confidence: Confidence = historicalAnchorConfidence(projection);
       return {
         kind: "times",
         arrivals: arrivalsFrom(times, now),
@@ -146,6 +146,7 @@ export function predictV1(input: PredictV1Input): Prediction {
           code: "historical_anchor",
           params: {
             clock: sgtClock(projection.anchor.capturedAt),
+            date: sgtDate(projection.anchor.capturedAt),
             gap: projection.anchorGapMin,
           },
         },
