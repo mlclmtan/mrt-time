@@ -68,7 +68,8 @@ Readings from Hermes are stored as `source = "hermes"`, `status = "approved"` an
 | `clientId` | UUID; makes retries idempotent (one row per owner + clientId). |
 | `kind` | `door`, `lift_lobby`, `station_entrance`, `tap_in`, `at_platform`, `board`, `alight`, `tap_out`, `desk`, `arrived`. |
 | `at` | ISO 8601 with offset — the moment it happened (photo time), never the processing time. |
-| `station`, `line`, `direction` | Optional context. `board` and `alight` events with `station` + `direction` also create a **train sighting** (`train_sighting`, `source = "hermes"`, approved): an exact sighting of a real train at that platform, which every board on the line uses at once (it is propagated along the line by ride times). `board` events also store the prediction for that moment in `prediction_check`. |
+| `station`, `line`, `direction` | Optional context. `board` and `alight` events with `station` + `direction` also create a **train sighting** (`train_sighting`, `source = "hermes"`, approved): a sighting of a real train at that platform, which boards along the line use at once (propagated by ride times while its error stays ≤ 1.5 min). An `alight` takes the direction of the boarding before it (same line, ≤ 3 h). `board` events logged within 2 min of their time also store the prediction for that moment in `prediction_check` (Hermes' are usually later, so not scored). |
+| `timeSource` | Optional (v2.1): `"now"` (tapped as it happened, ±0.5 min) or `"chosen"` (time picked by hand, ±1). Omitted: inferred from how late the event arrives (> 1 min late → ±1). Old bodies without it keep working. |
 | `journeyKey` | Optional: `home_to_office`, `office_to_home`, `office_to_home_tp`, … |
 | `note` | Optional free text (≤ 500 chars). Never sent to analytics. |
 
@@ -109,15 +110,18 @@ A sighting is a real train seen at a platform at a known moment. Three kinds fee
 | `boarded` | A `board` trip event (owner / Hermes) or a public "I boarded". | `train_sighting` |
 | `alighted` | An `alight` trip event or a public "Got off". | `train_sighting` |
 
-Owner and Hermes sightings link to their trip event (`trip_event_id`, unique): editing the event's time or platform in the timeline moves the sighting, deleting the event deletes it. Public ones come from `POST /api/sightings` (`{ station, direction, kind: "boarded" | "alighted", at }`, up to 12 h back), share the board-reading rate limit (10/hour per device + daily IP hash) and are approved only when within ±2 min of a train already known there; otherwise the owner reviews them in **Admin → Submissions**.
+Owner and Hermes sightings link to their trip event (`trip_event_id`, unique): editing the event's time or platform in the timeline moves the sighting, deleting the event deletes it. Public ones come from `POST /api/sightings` (`{ station, direction, kind: "boarded" | "alighted", at, timeSource? }`, up to 30 min back), share the board-reading rate limits (10/hour per device + daily IP hash, 20/hour per IP hash) and are approved only when within ±2 min of a train the owner / Hermes put there, or when a second network reports the same train within 1 min; otherwise the owner reviews them in **Admin → Submissions**. Public sightings count only at their own platform until two networks agree.
+
+**Error model (v2.1).** Every sighting stores `error_min`: a tap at Now ±0.5, a chosen time or a board's next train ±1, a board's 2nd / 3rd train ±1.5. Propagation adds 0.3 min a stop (0.1 on measured rides) and stops above 1.5 min, at a possible short-turn (EW29 Joo Koon, TE4 Springleaf — send `destination` when the board names the real terminal) and never starts from a boarding at a terminal. Nothing propagated is stored.
 
 ### Backfill (run once after the v2.0 migration)
 
 Trip events logged before v2.0 have no sighting yet. Hermes runs:
 
 ```bash
-pnpm db:migrate              # applies drizzle/0002_train_sightings.sql
-pnpm sightings:backfill      # idempotent: one sighting per board/alight event with a platform + direction
+pnpm db:migrate              # applies drizzle/0002_train_sightings.sql and (v2.1) 0003_review_followup.sql
+pnpm sightings:backfill      # idempotent: one sighting per board/alight event with a platform + direction;
+                             # v2.1: also sets error_min / created_at from the trip event where missing
 pnpm sightings:backfill --dry-run   # count only
 ```
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { affectedLines, parseAlerts, parseCrowd } from "./lta";
+import { affectedLines, parseAlerts, parseCrowd, pausedLines } from "./lta";
 import { parseTwoHour } from "./weather";
 
 // Synthetic payloads shaped like LTA DataMall / data.gov.sg responses.
@@ -20,6 +20,12 @@ describe("LTA DataMall parsers", () => {
     expect(affectedLines(alerts)).toEqual(["EWL"]);
     expect(parseAlerts({})).toBeNull();
     expect(affectedLines(parseAlerts({ value: { Status: 1, AffectedSegments: [], Message: [] } }))).toEqual([]);
+  });
+
+  it("an alert pauses propagation on its line (airport branch counts as the EWL)", () => {
+    const alerts = parseAlerts({ value: { Status: 2, AffectedSegments: [{ Line: "CGL", Direction: "Both", Stations: "CG1,CG2" }, { Line: "TEL", Direction: "Both", Stations: "TE17" }], Message: [] } });
+    expect(pausedLines(alerts)).toEqual(["EWL", "TEL"]);
+    expect(pausedLines(null)).toEqual([]);
   });
 
   it("parses crowd density levels", () => {

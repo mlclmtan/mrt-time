@@ -55,6 +55,13 @@ export function affectedLines(alerts: LineAlerts | null): string[] {
   return [...new Set(alerts.segments.map((s) => s.line))];
 }
 
+/** LTA alert line codes → ours (the airport branch and the old Circle Line extension included). */
+const ALERT_LINE: Record<string, string> = { CGL: "EWL", CEL: "CCL" };
+/** Lines whose sightings stay at their own platform while an alert is active (no propagation). */
+export function pausedLines(alerts: LineAlerts | null): string[] {
+  return [...new Set(affectedLines(alerts).map((l) => ALERT_LINE[l] ?? l))];
+}
+
 const cache = new Map<string, { at: number; value: unknown }>();
 async function cachedGet(path: string, fetchImpl: typeof fetch = fetch): Promise<unknown | null> {
   const key = process.env.LTA_ACCOUNT_KEY?.trim();

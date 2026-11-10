@@ -5,7 +5,7 @@ import { sgtDate } from "../time";
 import { getWindowSettings, loadObservations, type WindowSettings } from "./observations";
 import { loadSightings } from "./sightings";
 import { learnedRides } from "./rides";
-import { affectedLines, lineAlerts } from "./lta";
+import { lineAlerts, pausedLines } from "./lta";
 
 /** One train seen today at this platform: when, and how we know. */
 export type SeenTrain = {
@@ -68,12 +68,6 @@ export type PredictionData = {
 };
 type Data = PredictionData;
 
-/** LTA alert line codes → ours (the airport branch and the old Circle Line extension included). */
-const ALERT_LINE: Record<string, string> = { CGL: "EWL", CEL: "CCL" };
-export function pausedFromAlerts(lines: string[]): string[] {
-  return [...new Set(lines.map((l) => ALERT_LINE[l] ?? l))];
-}
-
 async function loadFor(codes: string[], lines: string[], now: number): Promise<Data> {
   const [observations, sightings, settings, rides, alerts] = await Promise.all([
     loadObservations(codes, lines, now),
@@ -82,7 +76,7 @@ async function loadFor(codes: string[], lines: string[], now: number): Promise<D
     learnedRides(lines, now),
     lineAlerts().catch(() => null),
   ]);
-  return { observations, sightings, settings, rides, pausedLines: pausedFromAlerts(affectedLines(alerts)) };
+  return { observations, sightings, settings, rides, pausedLines: pausedLines(alerts) };
 }
 
 /** Every per-platform prediction input that comes from the loaded data. */

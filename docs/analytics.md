@@ -70,11 +70,11 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `prediction_feedback` | `station` (code), `line`, `direction`, `verdict` (`accurate\|early\|late`) | Tap on accurate/early/late under a prediction (`live-board.tsx`) |
 | `log_reading` | `station` (code), `line`, `direction`, `trains` (1–3) | Reading saved successfully (`board/quick-entry.tsx`: station cards, owner Home, `/add`) |
 | `log_trip_event` | `kind` (`door, lift_lobby, station_entrance, tap_in, at_platform, board, alight, tap_out, desk, arrived`), `station?` (code), `line?` | Owner taps a trip-step button (`owner-home.tsx`) |
-| `boarded_logged` | `station` (code), `line`, `direction`, `minutes_back` (0–720: how far the time was moved back; 0 = now), `user_type` (`owner\|visitor`), `status?` (`approved\|pending\|rate_limited`) | "I boarded" on owner Home, a station card or `/add` |
+| `boarded_logged` | `station?` (code — **owner only**; dropped for visitors), `line`, `direction`, `minutes_back` (0–720: how far the time was moved back; 0 = now), `user_type` (`owner\|visitor`), `status?` (`approved\|pending\|rate_limited`) | "I boarded" on owner Home, a station card or `/add` |
 | `alighted_logged` | same as `boarded_logged` | "Got off" |
 | `timeline_edit` | `action` (`edit_time\|delete\|add_missed`), `kind` (trip step) | Owner edits today's timeline (Home / `/me`) |
 | `stats_view` | `trips` (number of complete trips) | Owner opens `/me/stats` |
-| `geo_suggest_shown` | `station` (slug), `surface` (`home\|add\|boarding\|stations`) | "You're at Tiong Bahru?" chip shown, or the "Near me" list's nearest station. **Never coordinates**: location is used once on the device to pick a station and dropped. |
+| `geo_suggest_shown` | `station?` (slug — **owner only**; dropped for visitors), `surface` (`home\|add\|boarding\|stations`) | "You're at Tiong Bahru?" chip shown, or the "Near me" list's nearest station. **Never coordinates**: location is used once on the device to pick a station and dropped. |
 | `geo_suggest_accepted` | same as `geo_suggest_shown` | The suggestion was tapped |
 | `submit_reading` | `station` (code), `line`, `direction`, `status` (`approved\|pending\|rate_limited`) | Quick-entry save result, incl. HTTP 429 (`board/quick-entry.tsx`) |
 | `install_prompt_shown` | `platform` (`ios\|android\|desktop\|other`) | `beforeinstallprompt` fires (Android/desktop Chromium only) (`install-prompt.tsx`) |
@@ -163,7 +163,9 @@ With marketing consent only: `fbq('track'|'trackCustom', event, data, { eventID:
 ## Privacy guarantees
 
 - No PII and no free text ever leaves for GA4, Meta or Clarity: event schemas cannot carry it (enforced by test), routes/referrers drop query strings, UTM values are slugged.
-- Location never leaves the device: the nearest station is computed in the browser from the station list, coordinates are dropped right away and never stored or sent (only the station slug appears in `geo_suggest_*`). The only thing remembered is the choice to use location (`localStorage mrt_geo`).
+- Location never leaves the device: the nearest station is computed in the browser from the station list, coordinates are dropped right away and never stored or sent. The only thing remembered is the choice to use location (`localStorage mrt_geo`).
+- **Location events never pair a station with a device (v2.1).** `boarded_logged`, `alighted_logged`, `geo_suggest_shown` and `geo_suggest_accepted` from visitors are sent without `station` (removed in `track()` and again at ingest — `privacyProps` in `src/lib/analytics/mapping.ts`); only the owner's (internal traffic) keep it. These events are never mapped to Meta Pixel / CAPI.
+- Clarity: the whole body is masked, and the owner pages (Home, `/me`, `/me/stats`, the trip timeline) carry `data-clarity-mask` on their roots as well.
 - Feedback text, NPS comments and newsletter emails are posted to `/api/feedback`, `/api/nps`, `/api/newsletter` and stored only in Neon (`feedback`, `nps_response`, `newsletter`). The analytics events for them carry only rating/category, score, or `double_opt_in`.
 - Newsletter rows store the consent timestamp (`consent_at`).
 - Meta CAPI receives only `client_user_agent`, `_fbp`, `_fbc`, the page URL (no query) and the mapped custom data. No IP, email or phone.
