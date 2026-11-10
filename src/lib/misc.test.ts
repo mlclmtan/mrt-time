@@ -68,3 +68,14 @@ describe("small helpers", () => {
     expect(updateAvailable("dev", "1.0.1+abc.x")).toBe(false);
   });
 });
+
+describe("security headers", () => {
+  it("allow geolocation for this origin only (the GPS station chip)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const config = readFileSync(new URL("../../next.config.ts", import.meta.url), "utf8");
+    const policy = /Permissions-Policy", value: "([^"]+)"/.exec(config)?.[1] ?? "";
+    expect(policy).toContain("geolocation=(self)");
+    expect(policy).not.toMatch(/geolocation=\(\)/);
+    expect(policy).toContain("camera=()");
+  });
+});

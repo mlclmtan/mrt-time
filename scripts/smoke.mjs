@@ -58,6 +58,13 @@ async function getJson(path) {
 
 // Pages
 await page("/", "MRT Time");
+// GPS "You're at …?" needs geolocation allowed for this origin (v2.1).
+await check("Permissions-Policy allows geolocation=(self)", async () => {
+  const { res } = await get("/");
+  const policy = res.headers.get("permissions-policy") || "";
+  assert(/geolocation=\(self\)/.test(policy), `got ${JSON.stringify(policy)}`);
+  return policy;
+});
 await page("/plan");
 await page("/station/tiong-bahru", "Tiong Bahru");
 await page("/station/outram-park", "Outram Park");
