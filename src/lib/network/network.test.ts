@@ -3,10 +3,14 @@ import {
   LINES,
   PLATFORMS,
   STATIONS,
+  canonicalDirection,
+  directionBetween,
   directionChoices,
   directionsAt,
   findRoutes,
   getStation,
+  isOriginTerminal,
+  isValidDirection,
   nearestStation,
   rideMinutes,
   stationsByDistance,
@@ -113,11 +117,41 @@ describe("full MRT network data", () => {
     // Branch codes don't follow the trunk: CG1/CG2 hang off EW4; CC33/CC34 sit on the Promenade link.
     expect(of("EWL", "TO_CHANGI_AIRPORT")).toEqual([["EW4", "CG1", "CG2"]]);
     expect(of("EWL", "TO_EAST")[0]).not.toContain("CG1");
-    expect(of("CCL", "TO_PROMENADE")).toEqual([["CC32", "CC33", "CC34", "CC4"]]);
     expect(of("CCL", "TO_DHOBY_GHAUT")[0].at(-1)).toBe("CC1");
     // The source has no generated sequences any more.
     const source = readFileSync(new URL("./data.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/function seq\(|seq\("/);
+  });
+
+  it("Circle Line since Stage 6 (v2.2): clockwise / anticlockwise round the loop, spur to Dhoby Ghaut, v2.1's link retired", () => {
+    const ccl = LINES.CCL.directions;
+    expect(ccl.TO_PRINCE_EDWARD_ROAD.board.en).toBe("Anticlockwise");
+    expect(ccl.TO_DHOBY_GHAUT.board.en).toBe("Clockwise");
+    expect(ccl.TO_PRINCE_EDWARD_ROAD.alsoBoard?.map((b) => b.en)).toEqual(["Prince Edward Road", "Stadium"]);
+    // The loop is CC4 … CC34 with no gap but Bukit Brown (CC18, unopened).
+    expect(ccl.TO_PRINCE_EDWARD_ROAD.loop).toHaveLength(30);
+    expect(ccl.TO_DHOBY_GHAUT.loop).toEqual([...ccl.TO_PRINCE_EDWARD_ROAD.loop!].reverse());
+    // Both ways everywhere on the loop (Bayfront and Marina Bay included); Dhoby Ghaut only one way.
+    for (const code of ["CC4", "CC29", "CC32", "CC33", "CC34"]) expect(directionsAt(code).map((d) => d.key).sort(), code).toEqual(["TO_DHOBY_GHAUT", "TO_PRINCE_EDWARD_ROAD"]);
+    expect(directionsAt("CC1").map((d) => d.key)).toEqual(["TO_PRINCE_EDWARD_ROAD"]);
+    // The quicker way round: HarbourFront → Prince Edward Road anticlockwise, Bayfront → Marina Bay clockwise.
+    expect(directionBetween("CC29", "CC32")?.key).toBe("TO_PRINCE_EDWARD_ROAD");
+    expect(directionBetween("CC34", "CC33")?.key).toBe("TO_DHOBY_GHAUT");
+    expect(directionBetween("CC32", "CC5")?.key).toBe("TO_PRINCE_EDWARD_ROAD");
+    expect(rideMinutes("CC32", "CC5")).toBe(8); // 4 stops via Marina Bay, Bayfront, Promenade
+    expect(isOriginTerminal("CCL", "TO_PRINCE_EDWARD_ROAD", "CC4")).toBe(false);
+    expect(isOriginTerminal("CCL", "TO_PRINCE_EDWARD_ROAD", "CC1")).toBe(true);
+    // Esplanade → Bayfront: change to the loop at Promenade (spur trains go the other way round).
+    const route = findRoutes("esplanade", "bayfront")[0];
+    expect(route.steps.filter((s) => s.kind === "ride" && s.line === "CCL").map((s) => (s.kind === "ride" ? `${s.from}>${s.to}` : ""))).toEqual(["CC3>CC4", "CC4>CC34"]);
+    // Retired key: not offered, new rows refused, stored rows read as today's direction.
+    expect(ccl.TO_PROMENADE.retired).toBe(true);
+    expect(directionChoices("bayfront").map((c) => c.direction)).not.toContain("TO_PROMENADE");
+    expect(isValidDirection("CCL", "TO_PROMENADE")).toBe(false);
+    expect(canonicalDirection("CCL", "TO_PROMENADE", "CC33")).toBe("TO_PRINCE_EDWARD_ROAD");
+    expect(canonicalDirection("CCL", "TO_PRINCE_EDWARD_ROAD", "CC34")).toBe("TO_DHOBY_GHAUT");
+    expect(canonicalDirection("CCL", "TO_PRINCE_EDWARD_ROAD", "CC20")).toBe("TO_PRINCE_EDWARD_ROAD");
+    expect(canonicalDirection("EWL", "TO_EAST", "EW17")).toBe("TO_EAST");
   });
 
   it("freezes the slugs, codes and direction keys stored rows and seeded journeys use", () => {

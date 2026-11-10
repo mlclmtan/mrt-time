@@ -5,7 +5,7 @@ import { stationForCode } from "@/lib/network";
 import { clock, dayText, plusMinusText } from "@/lib/format";
 import { useI18n } from "../i18n";
 
-/** "a board reading at 10:21 on Mon 2 Nov" / "the typical gap (~6 min)" (after "estimated from"). */
+/** "the platform screen at 10:21 on Mon 2 Nov" / "the typical gap (~6 min)" (after "estimated from"). */
 function basisText(t: T, b: EstimateBasis, locale: "en" | "zh-Hant"): string {
   switch (b.code) {
     case "historical_anchor":
@@ -27,6 +27,8 @@ export function boardReasonText(t: T, r: BoardReason, locale: "en" | "zh-Hant" =
       return t("reason.boarded_ago", { minutes: r.minutes });
     case "seen_elsewhere":
       return t("reason.seen_elsewhere", { minutes: r.minutes, station: stationForCode(r.station)?.name[locale] ?? r.station });
+    case "seen_ago":
+      return t("reason.seen_ago", { minutes: r.minutes });
     case "repeats":
       return t("reason.repeats", { days: r.days });
     case "historical_anchor":

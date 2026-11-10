@@ -1,11 +1,13 @@
 /** Shared OG card (English only: the bundled OG font has no CJK glyphs). */
+import { BrandMark } from "@/components/brand-mark";
 export const OG_SIZE = { width: 1200, height: 630 };
 
 export function OgCard({ title, subtitle, chips }: { title: string; subtitle: string; chips: { label: string; color: string }[] }) {
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#07090b", color: "#eef1f3", padding: 64, fontFamily: "sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ display: "flex", color: "#f6c343", fontSize: 36, border: "2px solid #232a31", borderRadius: 12, padding: "6px 14px" }}>3 min</div>
+        {/* Static brand mark (no number: a minutes badge read like a countdown). */}
+        <BrandMark size={56} />
         <div style={{ display: "flex", fontSize: 36, fontWeight: 700 }}>MRT Time</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

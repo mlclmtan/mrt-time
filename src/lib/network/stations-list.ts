@@ -74,7 +74,7 @@ export const STATION_ROWS: StationRow[] = [
   ["EW27", "Boon Lay", "文禮", 1.3386, 103.7058],
   ["EW28", "Pioneer", "先驅", 1.3376, 103.6972],
   ["EW30", "Gul Circle", "卡爾圈", 1.3196, 103.6607],
-  ["EW31", "Tuas Crescent", "大士灣", 1.3212, 103.6489],
+  ["EW31", "Tuas Crescent", "大士彎", 1.3212, 103.6489],
   ["EW32", "Tuas West Road", "大士西路", 1.3301, 103.6396],
   ["CG1/DT35", "Expo", "博覽", 1.3356, 103.9622],
   ["CG2", "Changi Airport", "樟宜機場", 1.3573, 103.9886],

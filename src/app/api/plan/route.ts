@@ -37,7 +37,7 @@ export const GET = timed("/api/plan", async (request) => {
     const all = await ownerJourneys(session.user.id);
     const journey = all.find((j) => j.key === journeyKey);
     if (!journey) return json({ error: "Unknown journey" }, 404);
-    const planned = await planJourney(journey.legs, mode, at);
+    const planned = await planJourney(journey.legs, mode, at, { detail: true });
     // Rain: point at the sheltered variant of the same trip, if this one isn't.
     const variants = all.filter((j) => j.fromPlace === journey.fromPlace && j.toPlace === journey.toPlace);
     const sheltered = !journey.sheltered ? shelteredSuggestion(variants, planned.rain?.rainy ?? false) : null;
@@ -50,5 +50,7 @@ export const GET = timed("/api/plan", async (request) => {
 
   const legs = publicLegs(p.get("from") || "", p.get("to") || "", clampMin(p.get("walkFrom")), clampMin(p.get("walkTo")));
   if (!legs) return json({ error: "No route between those stations" }, 404);
-  return json(await planJourney(legs, mode, at));
+  // How trains are known only for the signed-in owner (predict/privacy.ts).
+  const detail = (await getSession())?.user.role === "owner";
+  return json(await planJourney(legs, mode, at, { detail }));
 });

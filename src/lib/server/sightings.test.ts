@@ -84,16 +84,45 @@ describe("public sightings", () => {
   });
 
   it("the station board lists trains seen today, newest first", async () => {
-    const board = await stationBoard("outram-park", sgtInstant("2026-11-10", "10:40"));
+    const board = await stationBoard("outram-park", sgtInstant("2026-11-10", "10:40"), { detail: true });
     const ew = board!.platforms.find((p) => p.code === "EW16")!.directions.find((d) => d.key === "TO_EAST")!;
     expect(ew.seenToday.length).toBeGreaterThan(0);
     expect(ew.seenToday[0].at).toBeGreaterThanOrEqual(ew.seenToday.at(-1)!.at);
     expect(ew.seenToday.some((t) => t.how === "boarded")).toBe(true); // the owner's alight here
     // The public 10:15 boarding at Tiong Bahru is the same train (10:18 here): counted once.
     expect(ew.seenToday.length).toBe(1);
-    const tanjongPagar = await stationBoard("tanjong-pagar", sgtInstant("2026-11-10", "10:40"));
+    const tanjongPagar = await stationBoard("tanjong-pagar", sgtInstant("2026-11-10", "10:40"), { detail: true });
     const tp = tanjongPagar!.platforms[0].directions.find((d) => d.key === "TO_EAST")!;
     expect(tp.seenToday[0]).toMatchObject({ how: "passed", from: "EW16" });
+  });
+
+  it("v2.2 owner privacy: visitors get times only, every train 'seen' — no boarded / got off / other station / source", async () => {
+    const at = sgtInstant("2026-11-10", "10:40");
+    const owner = await stationBoard("outram-park", at, { detail: true });
+    const visitor = await stationBoard("outram-park", at); // the default: public
+    const pick = (b: typeof owner) => b!.platforms.find((p) => p.code === "EW16")!.directions.find((d) => d.key === "TO_EAST")!;
+    // Same trains at the same times…
+    expect(pick(visitor).seenToday.map((s) => s.at)).toEqual(pick(owner).seenToday.map((s) => s.at));
+    // …but only "seen", with nothing else attached.
+    for (const s of pick(visitor).seenToday) expect(s).toEqual({ at: s.at, how: "seen", spreadMin: 0 });
+    // A train passed along from another station: the station isn't named either.
+    const tpVisitor = (await stationBoard("tanjong-pagar", at))!.platforms[0].directions.find((d) => d.key === "TO_EAST")!;
+    expect(tpVisitor.seenToday[0]).toEqual({ at: tpVisitor.seenToday[0].at, how: "seen", spreadMin: 0 });
+    // The predictions' reasons: no "got on or off" and no station or anchor kind for visitors.
+    const json = JSON.stringify(visitor);
+    expect(json).not.toMatch(/"how":"(boarded|passed|reading)"|"from":"|boarded_ago|seen_elsewhere|"anchorKind":"(boarded|alighted)"|"anchorStation"/);
+    const ownerJson = JSON.stringify(owner);
+    expect(ownerJson).toMatch(/"how":"boarded"/);
+    // Rendered for a visitor: the time and "seen" — no icon, no "got on or off".
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { SeenToday } = await import("../../components/board/seen-today");
+    const html = renderToStaticMarkup(createElement(SeenToday, { trains: pick(visitor).seenToday }));
+    expect(html).toContain('data-seen="public"');
+    expect(html).toContain(">seen<");
+    expect(html).not.toMatch(/<svg|got on or off|Shown on this|Seen at/);
+    const ownerHtml = renderToStaticMarkup(createElement(SeenToday, { trains: pick(owner).seenToday }));
+    expect(ownerHtml).toContain("Someone got on or off here");
   });
 });
 
@@ -152,7 +181,7 @@ describe("v2.1 review follow-up (server)", () => {
     const rows = await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.station, "NS13"));
     expect(rows.every((r) => r.status === "approved")).toBe(true);
     // Agreed public taps now pass along the line.
-    const board = await stationBoard("khatib", now + 5 * 60_000);
+    const board = await stationBoard("khatib", now + 5 * 60_000, { detail: true });
     const dir = board!.platforms[0].directions.find((d) => d.key === "TO_JURONG_EAST")!;
     expect(dir.seenToday.some((t) => t.how === "passed")).toBe(true);
   });

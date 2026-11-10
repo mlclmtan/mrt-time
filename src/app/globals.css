@@ -88,6 +88,19 @@ button:disabled {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+/*
+ * Phone tab row: the edge that hides more tabs fades out (a cut-off tab
+ * always says "swipe"); set by NavTabs from the scroll position.
+ */
+.nav-fade[data-fade="right"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.nav-fade[data-fade="left"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.nav-fade[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
 .tabular {
   font-variant-numeric: tabular-nums;
 }

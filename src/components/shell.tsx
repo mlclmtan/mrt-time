@@ -5,6 +5,7 @@ import type { Role } from "@/lib/auth/access";
 import { LanguageSwitch } from "./language-switch";
 import { UpdateBanner, VersionTag } from "./update-banner";
 import { NavTabs } from "./nav-tabs";
+import { BrandMark } from "./brand-mark";
 import { FeedbackLink } from "./voc/feedback-widget";
 
 export async function SiteHeader({ role }: { role: Role | null }) {
@@ -25,7 +26,7 @@ export async function SiteHeader({ role }: { role: Role | null }) {
       <UpdateBanner />
       <div className="flex items-center gap-3 py-3">
         <Link href={href("/")} className="flex items-center gap-2 font-bold tracking-tight">
-          <span className="led rounded-md border border-line bg-panel px-1.5 py-0.5 text-sm">3 min</span>
+          <BrandMark />
           <span>{t("app.name")}</span>
         </Link>
         <NavTabs tabs={tabs} label="Main" layout="inline" className="ml-auto hidden sm:flex" />

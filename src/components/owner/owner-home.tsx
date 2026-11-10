@@ -347,21 +347,8 @@ export function OwnerHome({
         </div>
       )}
 
-      <CommutePanel
-        view={shownView}
-        now={now}
-        staleAt={staleAt}
-        finished={
-          finishedAt != null
-            ? {
-                arrivedAt: finishedAt,
-                what: label(endKind, "end"),
-                onLog: () => void log(endKind),
-                onDismiss: dismiss,
-              }
-            : null
-        }
-      />
+      {/* "Arrived ~10:25?" is asked once, on the big button above; the card plans from now. */}
+      <CommutePanel view={shownView} now={now} staleAt={staleAt} tripState={progress.state} />
 
       <section className="panel space-y-3 p-4" aria-label={t("owner.logTitle")}>
         {/* GPS never overrides the journey step (underground it is unreliable): only offered without one. */}

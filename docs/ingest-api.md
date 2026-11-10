@@ -54,7 +54,7 @@ All three keys are optional; send up to 50 readings and 100 trip events per call
 | Field | Rules |
 |---|---|
 | `station` | Platform code, e.g. `EW17`, `TE19`, `NE3` (see `src/lib/network/data.ts`). |
-| `direction` | Must exist on the platform's line (v2.0 covers every MRT line): NSL `TO_JURONG_EAST` / `TO_MARINA_SOUTH_PIER`; EWL `TO_EAST` / `TO_WEST`, Changi Airport branch `TO_CHANGI_AIRPORT` / `TO_TANAH_MERAH`; NEL `TO_HARBOURFRONT` / `TO_PUNGGOL`; CCL `TO_DHOBY_GHAUT` / `TO_PRINCE_EDWARD_ROAD` / `TO_PROMENADE` (via Marina Bay); DTL `TO_BUKIT_PANJANG` / `TO_EXPO`; TEL `TO_BAYSHORE` / `TO_NORTH`. |
+| `direction` | Must exist on the platform's line (v2.0 covers every MRT line): NSL `TO_JURONG_EAST` / `TO_MARINA_SOUTH_PIER`; EWL `TO_EAST` / `TO_WEST`, Changi Airport branch `TO_CHANGI_AIRPORT` / `TO_TANAH_MERAH`; NEL `TO_HARBOURFRONT` / `TO_PUNGGOL`; CCL `TO_DHOBY_GHAUT` (clockwise) / `TO_PRINCE_EDWARD_ROAD` (anticlockwise) — `TO_PROMENADE` is retired since v2.2 and refused; DTL `TO_BUKIT_PANJANG` / `TO_EXPO`; TEL `TO_BAYSHORE` / `TO_NORTH`. |
 | `minutes` | 1–3 integers (0–60), non-decreasing: next, next-next, optional third train. |
 | `capturedAt` | ISO 8601 with offset — the photo's capture time, **not** the time Hermes processed it. Default: now. Must be within the last 7 days. |
 | `destination` | Optional board destination text (≤ 40 chars). |
@@ -95,7 +95,7 @@ curl -sS -X POST "https://mrt.91208274.xyz/api/ingest" \
 ## Tips for extraction
 
 - Use the EXIF capture time of the photo as `capturedAt` / `at`, converted to `+08:00`.
-- Map the board's destination to a direction: Pasir Ris → `TO_EAST`; Joo Koon / Tuas Link → `TO_WEST`; Changi Airport → `TO_CHANGI_AIRPORT`; Tanah Merah (on the airport branch) → `TO_TANAH_MERAH`; Jurong East → `TO_JURONG_EAST`; Marina South Pier → `TO_MARINA_SOUTH_PIER`; Bayshore → `TO_BAYSHORE`; Woodlands North / Springleaf → `TO_NORTH` (send `destination: "Springleaf"` so the train isn't carried past Springleaf); HarbourFront → `TO_HARBOURFRONT`; Punggol Coast → `TO_PUNGGOL`; Dhoby Ghaut → `TO_DHOBY_GHAUT`; Prince Edward Road → `TO_PRINCE_EDWARD_ROAD`; Bukit Panjang → `TO_BUKIT_PANJANG`; Expo → `TO_EXPO`.
+- Map the board's destination to a direction: Pasir Ris → `TO_EAST`; Joo Koon / Tuas Link → `TO_WEST`; Changi Airport → `TO_CHANGI_AIRPORT`; Tanah Merah (on the airport branch) → `TO_TANAH_MERAH`; Jurong East → `TO_JURONG_EAST`; Marina South Pier → `TO_MARINA_SOUTH_PIER`; Bayshore → `TO_BAYSHORE`; Woodlands North / Springleaf → `TO_NORTH` (send `destination: "Springleaf"` so the train isn't carried past Springleaf); HarbourFront → `TO_HARBOURFRONT`; Punggol Coast → `TO_PUNGGOL`; Circle Line (v2.2): "Clockwise" or "ends at Dhoby Ghaut" → `TO_DHOBY_GHAUT`, "Anticlockwise" or "ends at Prince Edward Road" / "ends at Stadium" → `TO_PRINCE_EDWARD_ROAD` (send the screen's words as `destination`: "Anticlockwise" / "Clockwise" for loop trains, "Stadium" / "Prince Edward Road" / "Dhoby Ghaut" for trains that end there); Bukit Panjang → `TO_BUKIT_PANJANG`; Expo → `TO_EXPO`.
 - "I boarded at 10:14" / "got off at 10:17" in chat → a `board` / `alight` trip event with that `at`, the platform and the direction. That is the strongest evidence the app gets (better than a board countdown).
 - "Arr" or "0" on the board means `0` minutes.
 - The public form (`POST /api/readings`) is separate: it is rate-limited and auto-approves only readings consistent (±2 min) with an approved reading in the same 30-minute window.

@@ -98,22 +98,48 @@ describe("owner Home layout (H2) and next step (F10)", () => {
   });
 
   for (const clock of ["11:19", "12:10"]) {
-    it(`H1 at ${clock} (taps 10:14 / 10:17): button and card both ask 'Arrived ~10:25?'`, () => {
+    it(`H1 at ${clock} (taps 10:14 / 10:17): 'Arrived ~10:25?' is asked once — the big button — and the card plans from now`, () => {
       const html = render(at(clock));
       expect(html).not.toContain("On board");
       expect(html).not.toContain("Got off · Shenton Way");
-      // The big button: same finished-trip state as the card.
+      // The big button carries the prompt with Dismiss.
       expect(html).toContain('data-next-step="desk" data-trip-state="finished"');
       expect(dockText(html)).toBe("Arrived ~10:25? · Log At my desk Dismiss");
-      // The card: the prompt above a fresh pre-departure plan for the journey.
+      // v2.2: exactly once on the page (no second "Arrived" card above the plan).
+      expect(html.match(/Arrived ~10:25\?/g)).toHaveLength(1);
+      expect(html.match(/>Dismiss</g)).toHaveLength(1);
+      // The card below: just a fresh pre-departure plan from now.
       const card = html.slice(html.indexOf('data-commute-state="finished"'));
-      expect(card).toContain("Arrived ~10:25?");
-      expect(card).toContain("Log At my desk");
-      expect(card).toContain("Dismiss");
+      expect(card).not.toContain("Arrived");
+      expect(card).not.toContain("Log At my desk");
       expect(card).toMatch(/<h2 id="leave-now"[^>]*>(Leave in \d+:\d\d|Leave now)<\/h2>/);
       expect(card).toMatch(/Leave by \d\d:\d\d/);
+      expect(card).toContain("Next departures");
     });
   }
+
+  it("while on board (10:15, boarded 10:14): no 'Next departures' (it listed the train already boarded)", () => {
+    const boarded = [taps[0]];
+    const html = render(at("10:15"), boarded);
+    expect(html).toContain('data-trip-state="on_board"');
+    expect(html).toContain('id="leave-now"');
+    expect(html).not.toContain("Next departures");
+    expect(html).not.toContain('id="next-departures"');
+  });
+
+  it("on board by the phone's own taps before the server catches up (or offline): Next departures already hidden", () => {
+    // The server's last view is still the pre-departure one (with departures).
+    const now = at("10:15");
+    const stale = commuteView("home_to_office", legs, { state: "idle", fromLeg: 0, startAt: now }, timed, now);
+    expect(renderToStaticMarkup(<CommutePanel view={stale} now={now} staleAt={null} />)).toContain("Next departures");
+    expect(renderToStaticMarkup(<CommutePanel view={stale} now={now} staleAt={null} tripState="on_board" />)).not.toContain("Next departures");
+    expect(renderToStaticMarkup(<CommutePanel view={stale} now={now} staleAt={null} tripState="between" />)).not.toContain("Next departures");
+  });
+
+  it("Next departures come back once the trip is finished or dismissed", () => {
+    expect(render(at("12:10"))).toContain("Next departures"); // finished: planned from now
+    expect(render(at("12:10"), taps, at("10:17"))).toContain("Next departures"); // dismissed
+  });
 
   it("after Dismiss at 12:10: the next step is the journey's first (Home door), no prompt", () => {
     const html = render(at("12:10"), taps, at("10:17"));
@@ -123,14 +149,14 @@ describe("owner Home layout (H2) and next step (F10)", () => {
     expect(html).toMatch(/<h2 id="leave-now"[^>]*>Leave in \d+:\d\d<\/h2>/);
   });
 
-  it("the card's prompt follows the resolver, and dismissing keeps the fresh plan", () => {
+  it("the card never asks 'Arrived' itself; while the server still says on board it shows nothing stale", () => {
     const now = at("12:10");
     const view = commuteView("home_to_office", legs, resolveTrip(journey, taps, now).progress, timed, now);
-    const prompt = { arrivedAt: at("10:25"), what: "At my desk", onLog: () => {}, onDismiss: () => {} };
-    expect(renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} finished={prompt} />)).toContain("Arrived ~10:25?");
-    const dismissed = renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} finished={null} />);
-    expect(dismissed).not.toContain("Arrived");
-    expect(dismissed).toContain('id="leave-now"');
+    const finished = renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} tripState="finished" />);
+    expect(finished).not.toContain("Arrived");
+    expect(finished).toContain('id="leave-now"');
+    const onBoard = commuteView("home_to_office", legs, { state: "on_board", fromLeg: 2, startAt: at("12:08") }, timed, at("12:09"));
+    expect(renderToStaticMarkup(<CommutePanel view={onBoard} now={now} staleAt={null} tripState="finished" />)).toBe("");
   });
 
   it("time chips read as clock times: 10:14 · 10:13 · 10:12 · 10:09 · Other time", () => {

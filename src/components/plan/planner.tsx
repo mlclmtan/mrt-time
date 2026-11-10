@@ -284,7 +284,7 @@ function LegRow({ planned }: { planned: PlannedLeg }) {
         {planned.estimate && <span className="text-xs text-muted">({t("plan.estimate")})</span>}
       </div>
       {leg.tip && (
-        <p className="mt-1 pl-6 text-xs text-led">
+        <p className="mt-1 pl-6 text-xs break-words whitespace-normal text-led">
           {t("owner.tip")}: {leg.tip}
         </p>
       )}

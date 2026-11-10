@@ -6,6 +6,7 @@
 export const v2En = {
   "reason.boarded_ago": "A rider got on or off a train here {minutes} min ago",
   "reason.seen_elsewhere": "From a train seen at {station} {minutes} min ago",
+  "reason.seen_ago": "From a train seen {minutes} min ago",
   "reason.repeats": "Trains came at the same times on {days} recent days",
 
   "time.when": "When",
@@ -32,7 +33,7 @@ export const v2En = {
   "board.pm": "±{n} min",
   "day.another": "another day",
   "boardReason.staleToday": "Last train seen today at {time} is too long ago to use; estimated from {basis}",
-  "basis.historical": "a board reading at {clock} on {day}",
+  "basis.historical": "the platform screen at {clock} on {day}",
   "basis.repeats": "times that repeated on {days} recent days",
   "basis.typical": "the typical gap (~{n} min)",
   "basis.unstable": "the typical gap (~{n} min; times shift day to day at this hour)",
@@ -64,8 +65,9 @@ export const v2En = {
 
   "seen.title": "Trains seen today ({n})",
   "seen.boarded": "Someone got on or off here",
-  "seen.reading": "Shown on this board",
+  "seen.reading": "Shown on this platform screen",
   "seen.passed": "Seen at {station}",
+  "seen.seen": "seen",
 
   "kind.door": "Home door",
   "kind.lift_lobby": "Lift lobby",
@@ -80,9 +82,9 @@ export const v2En = {
 
   "owner.logTitle": "Log a step",
   "admin.engine": "Predictor",
-  "admin.engine.help": "Kill switch: v1 uses board readings at each platform only (no boardings, no times passed along the line, no learning). Takes effect within a minute everywhere.",
+  "admin.engine.help": "Kill switch: v1 uses platform screens logged at each platform only (no boardings, no times passed along the line, no learning). Takes effect within a minute everywhere.",
   "admin.engine.v2": "v2 (boardings + learning)",
-  "admin.engine.v1": "v1 (board readings only)",
+  "admin.engine.v1": "v1 (platform screens only)",
   "timeline.title": "Today's trip ({n})",
   "timeline.empty": "Nothing logged today yet.",
   "timeline.totals": "Walking {walk} min · waiting {wait} min · on trains {ride} min · changing {change} min",
@@ -122,6 +124,7 @@ export const v2En = {
 export const v2Zh: Record<keyof typeof v2En, string> = {
   "reason.boarded_ago": "{minutes} 分鐘前有乘客在此站上落車",
   "reason.seen_elsewhere": "根據 {minutes} 分鐘前在{station}看到的列車",
+  "reason.seen_ago": "根據 {minutes} 分鐘前看到的列車",
   "reason.repeats": "最近 {days} 天列車都在同樣時間到站",
 
   "time.when": "時間",
@@ -148,7 +151,7 @@ export const v2Zh: Record<keyof typeof v2En, string> = {
   "board.pm": "±{n} 分鐘",
   "day.another": "另一天",
   "boardReason.staleToday": "今天最後看到的列車在 {time}，已太久無法使用；改以{basis}估算",
-  "basis.historical": "{day} {clock} 的顯示屏讀數",
+  "basis.historical": "{day} {clock} 的月台顯示屏",
   "basis.repeats": "最近 {days} 天重複出現的時間",
   "basis.typical": "典型班距（約 {n} 分鐘）",
   "basis.unstable": "典型班距（約 {n} 分鐘；此時段每天時間不同）",
@@ -180,8 +183,9 @@ export const v2Zh: Record<keyof typeof v2En, string> = {
 
   "seen.title": "今天看到的列車（{n}）",
   "seen.boarded": "有人在此上落車",
-  "seen.reading": "此顯示屏顯示",
+  "seen.reading": "此月台顯示屏顯示",
   "seen.passed": "在{station}看到",
+  "seen.seen": "看到",
 
   "kind.door": "家門",
   "kind.lift_lobby": "電梯大堂",
@@ -196,9 +200,9 @@ export const v2Zh: Record<keyof typeof v2En, string> = {
 
   "owner.logTitle": "記錄一步",
   "admin.engine": "預測引擎",
-  "admin.engine.help": "緊急開關：v1 只用各月台的顯示屏讀數（不用上落車記錄、不沿線推算、不學習）。一分鐘內全站生效。",
+  "admin.engine.help": "緊急開關：v1 只用各月台記錄的月台顯示屏（不用上落車記錄、不沿線推算、不學習）。一分鐘內全站生效。",
   "admin.engine.v2": "v2（上落車記錄＋學習）",
-  "admin.engine.v1": "v1（只用顯示屏讀數）",
+  "admin.engine.v1": "v1（只用月台顯示屏）",
   "timeline.title": "今天的行程（{n}）",
   "timeline.empty": "今天還沒有記錄。",
   "timeline.totals": "步行 {walk} 分鐘 · 候車 {wait} 分鐘 · 乘車 {ride} 分鐘 · 轉車 {change} 分鐘",

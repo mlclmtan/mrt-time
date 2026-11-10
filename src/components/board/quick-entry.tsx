@@ -27,7 +27,7 @@ import { useI18n } from "../i18n";
 type Status = { kind: "idle" | "busy" | "limit" | "error" | "undone" } | { kind: "saved"; pending: boolean; obs: Observation; id: number | null; until: number };
 
 /**
- * "Board says: next train to Pasir Ris in [ ] min, then [ ] min".
+ * "Screen says: next train to Pasir Ris in [ ] min, then [ ] min".
  * Chips 0–15 fill the next empty box; time seen = now unless changed.
  */
 export function QuickEntry({

@@ -34,6 +34,7 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
   if (!station) notFound();
   const { locale, t } = await getT();
   const [board, alerts, crowd] = await Promise.all([
+    // Always the visitors' view here (times only); the owner's detail comes from /api/board.
     stationBoard(slug).catch(() => null),
     lineAlerts().catch(() => null),
     crowdForStations(station.codes).catch(() => null),

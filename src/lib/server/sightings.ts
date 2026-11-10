@@ -9,7 +9,7 @@ import { and, desc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { dbConfigured, getDb, type Db } from "../db";
 import { trainSighting, tripEvent } from "../db/schema";
-import { DIRECTION_KEY_RE, PLATFORM_CODE_RE, getPlatform, isValidDirection } from "../network";
+import { DIRECTION_KEY_RE, PLATFORM_CODE_RE, canonicalDirection, getPlatform, isValidDirection } from "../network";
 import { CORROBORATE_MIN, NOW_TAP_LAG_MS, knownTrainsAt, linkRides, tapError, type TrainSighting } from "../predict/sightings";
 import { sightingApprovalStatus } from "../predict/readings";
 import type { ReadingSource, ReadingStatus } from "../predict";
@@ -28,7 +28,8 @@ export function toSighting(r: Row): TrainSighting {
     id: r.id,
     station: r.station,
     line: r.line,
-    direction: r.direction,
+    // Pre-v2.2 Circle Line keys are read as the current direction.
+    direction: canonicalDirection(r.line, r.direction, r.station),
     at: new Date(r.at).getTime(),
     kind: r.kind as TrainSighting["kind"],
     source: r.source as ReadingSource,
@@ -94,11 +95,12 @@ type TripRow = Pick<typeof tripEvent.$inferSelect, "id" | "userId" | "kind" | "a
 export function sightingForTripEvent(e: TripRow, opts: { errorMin?: number | null } = {}) {
   const kind = SIGHTING_KIND[e.kind];
   const platform = e.station ? getPlatform(e.station) : undefined;
-  if (!kind || !platform || !e.direction || !isValidDirection(platform.line, e.direction)) return null;
+  const direction = platform && e.direction ? canonicalDirection(platform.line, e.direction, platform.code) : null;
+  if (!kind || !platform || !direction || !isValidDirection(platform.line, direction)) return null;
   return {
     station: platform.code,
     line: platform.line,
-    direction: e.direction,
+    direction,
     at: new Date(e.at),
     kind,
     source: e.source === "hermes" ? "hermes" : "owner",

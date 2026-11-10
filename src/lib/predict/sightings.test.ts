@@ -118,16 +118,29 @@ describe("propagation along the line (error model)", () => {
     expect(trainAt(branch, "EW3")).toBeNull();
   });
 
-  it("Circle Line: where its two routes split at Promenade the train's path is unknown, elsewhere it is not", () => {
-    const trunk = boarded("CC5", "CCL", "TO_PRINCE_EDWARD_ROAD", "10:00");
-    expect(trainAt(trunk, "CC4")).not.toBeNull();
-    expect(trainAt(trunk, "CC6")).not.toBeNull();
-    const link = boarded("CC33", "CCL", "TO_PRINCE_EDWARD_ROAD", "10:00");
-    expect(trainAt(link, "CC34")).not.toBeNull();
-    // At Promenade a "Prince Edward Road" train goes via HarbourFront or via Marina Bay.
-    const split = boarded("CC4", "CCL", "TO_PRINCE_EDWARD_ROAD", "10:00");
-    expect(trainAt(split, "CC5")).toBeNull();
-    expect(trainAt(split, "CC34")).toBeNull();
+  it("Circle Line (v2.2 loop): loop trains run round past Bayfront → Promenade; spur trains make the merge unknown", () => {
+    // Anticlockwise (TO_PRINCE_EDWARD_ROAD key): Marina Bay → Bayfront → Promenade → Nicoll Highway, round the loop.
+    const loop = boarded("CC33", "CCL", "TO_PRINCE_EDWARD_ROAD", "10:00");
+    expect(trainAt(loop, "CC34")).not.toBeNull();
+    expect(trainAt(loop, "CC4")).not.toBeNull();
+    expect(trainAt(loop, "CC5")!.at).toBeGreaterThan(trainAt(loop, "CC4")!.at);
+    expect(trainOffset("CCL", "TO_PRINCE_EDWARD_ROAD", "CC33", "CC5")).toMatchObject({ hops: 3, between: ["CC33", "CC34", "CC4", "CC5"] });
+    // …and earlier it passed Prince Edward Road (the nearer way round is upstream).
+    expect(trainAt(loop, "CC32")!.at).toBeLessThan(loop.at);
+    // Clockwise (TO_DHOBY_GHAUT key) runs the other way: Bayfront → Marina Bay → Prince Edward Road.
+    const cw = boarded("CC34", "CCL", "TO_DHOBY_GHAUT", "10:00");
+    expect(trainAt(cw, "CC33")!.at).toBeGreaterThan(cw.at);
+    expect(trainAt(cw, "CC4")!.at).toBeLessThan(cw.at);
+    // At Nicoll Highway a train may have come from the spur (Esplanade) or the loop (Bayfront): upstream past Promenade is unknown.
+    const merged = boarded("CC5", "CCL", "TO_PRINCE_EDWARD_ROAD", "10:00");
+    expect(trainAt(merged, "CC4")).not.toBeNull();
+    expect(trainAt(merged, "CC34")).toBeNull();
+    // Past Stadium only when the screen said it isn't the off-peak shuttle ("ends at Stadium").
+    expect(trainAt(merged, "CC6")).not.toBeNull();
+    expect(trainAt(merged, "CC7")).toBeNull();
+    expect(trainAt({ ...merged, destination: "Anticlockwise" }, "CC7")).not.toBeNull();
+    expect(shortTurnStop("CCL", "TO_PRINCE_EDWARD_ROAD", "CC5", "Stadium")).toBe("CC6");
+    expect(shortTurnStop("CCL", "TO_PRINCE_EDWARD_ROAD", "CC5", "Prince Edward Road")).toBe("CC32");
   });
 
   it("pauses propagation (disruption) and uses learned ride times when given", () => {

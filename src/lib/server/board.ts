@@ -6,16 +6,9 @@ import { getWindowSettings, loadObservations, type WindowSettings } from "./obse
 import { loadSightings } from "./sightings";
 import { learnedRides } from "./rides";
 import { lineAlerts, pausedLines } from "./lta";
+import { publicPrediction, publicSeenTrains, type SeenTrain } from "../predict/privacy";
 
-/** One train seen today at this platform: when, and how we know. */
-export type SeenTrain = {
-  at: number;
-  /** boarded = someone got on/off here; reading = shown on this board; passed = seen at another station. */
-  how: "boarded" | "reading" | "passed";
-  /** Platform where it was seen, for "passed". */
-  from?: string;
-  spreadMin: number;
-};
+export type { SeenTrain };
 
 export type BoardDirection = {
   key: string;
@@ -96,11 +89,17 @@ function predictWith(data: Data, line: string, direction: string, station: strin
   return predict({ line, direction, station, now, ...predictOptions(data, line) });
 }
 
-export async function stationBoard(slug: string, now = Date.now()): Promise<Board | null> {
+/**
+ * `detail`: how each train is known (signed-in owner only). Visitors get
+ * times only — every train "seen", no source — see predict/privacy.ts.
+ */
+export async function stationBoard(slug: string, now = Date.now(), opts: { detail?: boolean } = {}): Promise<Board | null> {
   const station = getStation(slug);
   if (!station) return null;
   const lines = [...new Set(station.codes.map((c) => getPlatform(c)!.line))];
   const data = await loadFor(station.codes, lines, now);
+  const shown = (p: Prediction) => (opts.detail ? p : publicPrediction(p));
+  const seen = (s: SeenTrain[]) => (opts.detail ? s : publicSeenTrains(s));
   return {
     station: slug,
     now,
@@ -118,8 +117,8 @@ export async function stationBoard(slug: string, now = Date.now()): Promise<Boar
           label: d.label,
           board: d.board,
           terminal: d.terminal,
-          prediction: predictWith(data, line.code, d.key, code, now),
-          seenToday: seenToday({ station: code, line: line.code, direction: d.key, ...predictOptions(data, line.code) }, now),
+          prediction: shown(predictWith(data, line.code, d.key, code, now)),
+          seenToday: seen(seenToday({ station: code, line: line.code, direction: d.key, ...predictOptions(data, line.code) }, now)),
         })),
       };
     }),

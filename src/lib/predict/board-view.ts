@@ -36,6 +36,7 @@ export type BoardReason =
   | { code: "reading_ago"; minutes: number }
   | { code: "boarded_ago"; minutes: number }
   | { code: "seen_elsewhere"; minutes: number; station: string }
+  | { code: "seen_ago"; minutes: number }
   | EstimateBasis
   /** Trains were seen here today but the last one is too old to place trains: "estimated from <basis>". */
   | { code: "stale_today"; seenAt: number; basis: EstimateBasis };
@@ -106,7 +107,7 @@ export function directionView(p: Prediction, now: number, line?: string, lastSee
   const view = baseDirectionView(p, now, line);
   if (view.state === "closed" || lastSeenToday == null || lastSeenToday > now) return view;
   const r = view.reason;
-  if (r.code === "reading_ago" || r.code === "boarded_ago" || r.code === "seen_elsewhere" || r.code === "stale_today") return view;
+  if (r.code === "reading_ago" || r.code === "boarded_ago" || r.code === "seen_elsewhere" || r.code === "seen_ago" || r.code === "stale_today") return view;
   return { ...view, reason: { code: "stale_today", seenAt: lastSeenToday, basis: r } };
 }
 
@@ -130,7 +131,9 @@ function baseDirectionView(p: Prediction, now: number, line?: string): Direction
         ? { code: "seen_elsewhere", minutes, station: String(p.reason.params.station ?? "") }
         : p.reason.code === "boarded_ago"
           ? { code: "boarded_ago", minutes }
-          : { code: "reading_ago", minutes };
+          : p.reason.code === "seen_ago"
+            ? { code: "seen_ago", minutes }
+            : { code: "reading_ago", minutes };
     return {
       ...base,
       state: times[0]?.plusMinus == null ? "exact" : "estimate",

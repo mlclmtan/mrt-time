@@ -7,6 +7,7 @@ import { getDb, dbConfigured, type Db } from "../db";
 import { appSetting, observation } from "../db/schema";
 import { DEFAULT_UNSTABLE_WINDOWS, type Observation, type UnstableWindow } from "../predict";
 import { DAY } from "../time";
+import { canonicalDirection } from "../network";
 
 export const HISTORY_DAYS = 120;
 
@@ -16,7 +17,8 @@ export function toObservation(r: Row): Observation {
     id: r.id,
     station: r.station,
     line: r.line,
-    direction: r.direction,
+    // Pre-v2.2 Circle Line keys are read as the current direction.
+    direction: canonicalDirection(r.line, r.direction, r.station),
     destination: r.destination,
     capturedAt: new Date(r.capturedAt).getTime(),
     minutes: r.minutes,

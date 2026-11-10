@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { formatDateRange } from "@/lib/format";
-import { isActiveTab } from "./nav-tabs";
+import { centredScroll, fadeEdges, isActiveTab } from "./nav-tabs";
+import { BrandMark } from "./brand-mark";
+
+describe("v2.2 header and phone tab row", () => {
+  it("a clipped tab always has a hint: the hiding edge fades; the current tab is centred", () => {
+    // 393 px wide row, 560 px of tabs.
+    expect(fadeEdges(0, 393, 560)).toBe("right");
+    expect(fadeEdges(80, 393, 560)).toBe("both");
+    expect(fadeEdges(167, 393, 560)).toBe("left");
+    expect(fadeEdges(0, 393, 380)).toBe("none");
+    // The 5th tab (at 470 px, 90 px wide) scrolls into the middle, clamped to the row.
+    expect(centredScroll(470, 90, 393, 560)).toBe(167);
+    expect(centredScroll(20, 60, 393, 560)).toBe(0);
+    const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.nav-fade\[data-fade="right"\]\s*\{[^}]*mask-image/);
+    expect(css).toMatch(/\.nav-fade\[data-fade="both"\]\s*\{[^}]*mask-image/);
+  });
+
+  it("the header shows a static brand mark (no '3 min' countdown look) and keeps the app name", () => {
+    const shell = readFileSync(new URL("./shell.tsx", import.meta.url), "utf8");
+    expect(shell).not.toContain("3 min");
+    expect(shell).toContain("<BrandMark />");
+    expect(shell).toContain('t("app.name")');
+    const mark = renderToStaticMarkup(createElement(BrandMark));
+    expect(mark).toContain("data-brand-mark");
+    expect(mark.replace(/<[^>]+>/g, "")).toBe(""); // no text, no number
+    expect(readFileSync(new URL("../lib/og.tsx", import.meta.url), "utf8")).not.toContain("3 min");
+  });
+});
 
 describe("nav active state", () => {
   it("matches the current page, locale-aware, never hash links", () => {

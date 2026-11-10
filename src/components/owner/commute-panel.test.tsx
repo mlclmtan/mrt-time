@@ -33,7 +33,7 @@ describe("CommutePanel", () => {
     expect(html).not.toContain("Leave now");
     expect(html).toContain("Leave by 18:03");
     expect(html).toContain("18:12");
-    expect(html).toContain("From a board reading 12 min ago");
+    expect(html).toContain("From the platform screen 12 min ago");
     expect(html).toContain("Door 3-2");
     expect(html).not.toContain("Clock times shift");
   });
@@ -54,6 +54,20 @@ describe("CommutePanel", () => {
     // Rendered: the header follows the clock.
     const html = renderToStaticMarkup(<CommutePanel view={view} now={rows[0].leaveAt + 5000} staleAt={null} />);
     expect(html).toContain("You&#x27;ve missed this one, next: 18:08");
+  });
+
+  it("door tip: icon aligned on the first line, the full text wraps (never cut short)", () => {
+    const tip = "Door 3-2 — nearest the escalator up to the Thomson–East Coast Line platform at Outram Park";
+    const long: Leg[] = legs.map((l) => (l.kind === "ride" && l.line === "EWL" ? { ...l, tip } : l));
+    const now = at("18:00");
+    const html = renderToStaticMarkup(<CommutePanel view={commuteView("office_to_home", long, { state: "idle", fromLeg: 0, startAt: now }, timed, now)} now={now} staleAt={null} />);
+    const row = /<p class="door-tip ([^"]*)">(.*?)<\/p>/.exec(html);
+    expect(row).not.toBeNull();
+    expect(row![1]).toContain("items-start");
+    expect(row![2]).toMatch(/<svg[^>]*class="[^"]*shrink-0/);
+    expect(row![2]).toContain(`Best doors: ${tip}`);
+    expect(html).not.toMatch(/door-tip[^"]*(truncate|line-clamp|text-ellipsis)/);
+    expect(row![2]).toMatch(/<span class="[^"]*whitespace-normal/);
   });
 
   it("shows ranges inside the unstable window", () => {

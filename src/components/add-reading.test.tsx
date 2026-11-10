@@ -7,13 +7,13 @@ import { QuickEntry } from "./board/quick-entry";
 const JARGON = /headway|source|status|observation|direction key|dest code|TO_EAST|TO_WEST|TO_NORTH|TO_BAYSHORE/i;
 const visibleText = (html: string) => html.replace(/<[^>]+>/g, " ");
 
-describe("Add a reading (/add)", () => {
+describe("Log a train (/add)", () => {
   it("shows the station, big buttons named like the board, and minute chips on one screen", () => {
     const html = renderToStaticMarkup(<AddReading defaultStation="EW17" defaultDirection="TO_EAST" />);
     expect(html).toContain("Tiong Bahru");
     expect(html).toContain("Pasir Ris");
     expect(html).toContain("Joo Koon / Tuas Link");
-    expect(html).toContain("Board says:");
+    expect(html).toContain("Screen says:");
     expect(html).toContain("next train to Pasir Ris in");
     for (const n of [0, 7, 15]) expect(html).toMatch(new RegExp(`>${n}</button>`));
     expect(html).toContain("seen at");
@@ -42,7 +42,7 @@ describe("Add a reading (/add)", () => {
 
   it("the inline station-page entry reads like the platform board, with no jargon", () => {
     const html = renderToStaticMarkup(<QuickEntry station="EW17" line="EWL" direction="TO_EAST" destination="Pasir Ris" />);
-    expect(visibleText(html).replace(/\s+/g, " ")).toMatch(/Board says: next train to Pasir Ris in – min, then – min/);
+    expect(visibleText(html).replace(/\s+/g, " ")).toMatch(/Screen says: next train to Pasir Ris in – min, then – min/);
     expect(visibleText(html)).not.toMatch(JARGON);
   });
 });

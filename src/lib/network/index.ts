@@ -2,6 +2,7 @@ import { sgtMinuteOfDay, MINUTES_PER_DAY } from "../time";
 import {
   BRANCH_CHANGE_MIN,
   DEFAULT_TRANSFER_MIN,
+  LEGACY_DIRECTIONS,
   LINES,
   LINE_CODE_LIST,
   PLATFORMS,
@@ -40,8 +41,19 @@ export function stationForCode(code: string): Station | undefined {
 export function getDirection(line: string, key: string): Direction | undefined {
   return getLine(line)?.directions[key];
 }
+/** A direction new rows may use (retired keys are refused; stored ones are read via `canonicalDirection`). */
 export function isValidDirection(line: string, key: string) {
-  return Boolean(getDirection(line, key));
+  const d = getDirection(line, key);
+  return Boolean(d && !d.retired);
+}
+/** The current direction for a stored row (see LEGACY_DIRECTIONS); unchanged otherwise. */
+export function canonicalDirection(line: string, key: string, station?: string | null): string {
+  const hit = LEGACY_DIRECTIONS.find((l) => l.line === line && l.key === key && (!l.stations || (station != null && l.stations.includes(station))));
+  return hit?.into ?? key;
+}
+/** Live directions of a line (retired keys left out). */
+function liveDirections(line: Line): Direction[] {
+  return Object.values(line.directions).filter((d) => !d.retired);
 }
 /** Platforms of a line in running order (first path that contains each). */
 export function platformsOnLine(line: LineCode): Platform[] {
@@ -54,6 +66,8 @@ export function platformsOnLine(line: LineCode): Platform[] {
 
 /** Does a train in this direction leave from `code` (on a path, not at its end)? */
 export function directionServes(direction: Direction, code: string): boolean {
+  if (direction.retired) return false;
+  if (direction.loop?.includes(code)) return true;
   return direction.paths.some((p) => {
     const i = p.indexOf(code);
     return i >= 0 && i < p.length - 1;
@@ -63,7 +77,18 @@ export function directionServes(direction: Direction, code: string): boolean {
 export function directionsAt(code: string): Direction[] {
   const p = PLATFORMS[code];
   if (!p) return [];
-  return Object.values(LINES[p.line].directions).filter((d) => directionServes(d, code));
+  return liveDirections(LINES[p.line]).filter((d) => directionServes(d, code));
+}
+
+/**
+ * Stops from `a` forward to `b` round a loop (both ends included), or null.
+ * Never the whole way round (a ≠ b).
+ */
+function loopSlice(loop: readonly string[], a: string, b: string): string[] | null {
+  const i = loop.indexOf(a);
+  const j = loop.indexOf(b);
+  if (i < 0 || j < 0 || i === j) return null;
+  return j > i ? loop.slice(i, j + 1) : [...loop.slice(i), ...loop.slice(0, j + 1)];
 }
 
 const key = (a: string, b: string) => `${a}>${b}`;
@@ -75,15 +100,20 @@ const key = (a: string, b: string) => `${a}>${b}`;
  */
 export type RideOverrides = Readonly<Record<string, number>>;
 
-function pathBetween(a: string, b: string) {
+/** The shortest run of stops from a to b on any live path or loop. */
+function pathBetween(a: string, b: string): string[] | null {
+  const runs: string[][] = [];
   for (const line of Object.values(LINES))
-    for (const d of Object.values(line.directions))
+    for (const d of liveDirections(line)) {
       for (const p of d.paths) {
         const i = p.indexOf(a);
         const j = p.indexOf(b);
-        if (i >= 0 && j > i) return p.slice(i, j + 1);
+        if (i >= 0 && j > i) runs.push(p.slice(i, j + 1));
       }
-  return null;
+      const round = d.loop ? loopSlice(d.loop, a, b) : null;
+      if (round) runs.push(round);
+    }
+  return runs.reduce<string[] | null>((best, r) => (!best || r.length < best.length ? r : best), null);
 }
 
 /** Minutes between adjacent platforms from ride figures; longer rides spread over their unknown hops. */
@@ -137,7 +167,8 @@ export function rideMeasured(a: string, b: string, learned?: RideOverrides | nul
   return key(a, b) in RIDE_MINUTES || key(b, a) in RIDE_MINUTES || Boolean(learned && (key(a, b) in learned || key(b, a) in learned));
 }
 
-type IndexedPath = { codes: string[]; pos: Map<string, number>; cum: number[] };
+/** `loopTotal`: minutes once round (loops only: the last stop runs on to the first). */
+type IndexedPath = { codes: string[]; pos: Map<string, number>; cum: number[]; loopTotal?: number };
 const PATHS = new WeakMap<Map<string, number>, Map<string, IndexedPath[]>>();
 function indexedPaths(line: string, direction: string, learned?: RideOverrides | null): IndexedPath[] {
   const hops = hopsFor(learned);
@@ -147,13 +178,26 @@ function indexedPaths(line: string, direction: string, learned?: RideOverrides |
   const cached = byDir.get(k);
   if (cached) return cached;
   const d = getDirection(line, direction);
-  const out = (d?.paths ?? []).map((codes) => {
+  const index = (codes: string[]): IndexedPath => {
     const cum = [0];
     for (let i = 1; i < codes.length; i++) cum.push(cum[i - 1] + hopMinutes(codes[i - 1], codes[i], learned));
     return { codes, pos: new Map(codes.map((c, i) => [c, i])), cum };
-  });
+  };
+  const out = (d?.paths ?? []).map(index);
+  if (d?.loop) {
+    const loop = index(d.loop);
+    loop.loopTotal = loop.cum[loop.cum.length - 1] + hopMinutes(d.loop[d.loop.length - 1], d.loop[0], learned);
+    out.push(loop);
+  }
   byDir.set(k, out);
   return out;
+}
+
+/** Forward run from i to j (wrapping round a loop): hops, minutes and the stops passed. */
+function forward(p: IndexedPath, i: number, j: number) {
+  if (j >= i) return { hops: j - i, minutes: p.cum[j] - p.cum[i], between: p.codes.slice(i, j + 1) };
+  if (p.loopTotal == null) return null;
+  return { hops: p.codes.length - i + j, minutes: p.loopTotal - p.cum[i] + p.cum[j], between: [...p.codes.slice(i), ...p.codes.slice(0, j + 1)] };
 }
 
 export type TrainOffset = {
@@ -165,7 +209,10 @@ export type TrainOffset = {
 
 /** A path of this direction starts here: trains wait (dwell) at a terminal, so a boarding there doesn't time the train. */
 export function isOriginTerminal(line: string, direction: string, code: string): boolean {
-  const paths = getDirection(line, direction)?.paths.filter((p) => p.includes(code)) ?? [];
+  const d = getDirection(line, direction);
+  // Loop trains run straight through every stop.
+  if (d?.loop?.includes(code)) return false;
+  const paths = d?.paths.filter((p) => p.includes(code)) ?? [];
   return paths.length > 0 && paths.every((p) => p[0] === code);
 }
 
@@ -175,7 +222,9 @@ export function isOriginTerminal(line: string, direction: string, code: string):
  * of a junction where branches merge is ambiguous, so it is only given when
  * every path through `from` agrees. `stopAt` cuts the trip short at an early
  * terminal (e.g. Springleaf, or a possible short-turn) for stops beyond it.
- * `learned` ride minutes (owner's trips) win over the defaults.
+ * `learned` ride minutes (owner's trips) win over the defaults. On a loop
+ * the same train is both ahead and behind: the nearer way round is used
+ * (downstream up to half the loop, else upstream).
  */
 export function trainOffset(
   line: string,
@@ -189,10 +238,20 @@ export function trainOffset(
   const paths = indexedPaths(line, direction, learned).filter((p) => p.pos.has(from));
   if (!paths.length) return null;
   // Every path through `from` must agree (branches that merge or split make it ambiguous).
-  const offsets = paths.map((p) => {
+  const offsets = paths.map((p): TrainOffset | null => {
     const i = p.pos.get(from)!;
     const j = p.pos.get(to);
     if (j == null) return null;
+    if (p.loopTotal != null) {
+      const ahead = forward(p, i, j)!;
+      if (ahead.hops <= p.codes.length / 2) {
+        // An early terminal on the way cuts the trip short.
+        if (stopAt && ahead.between.slice(1, -1).includes(stopAt)) return null;
+        return ahead;
+      }
+      const behind = forward(p, j, i)!;
+      return { minutes: -behind.minutes, hops: -behind.hops, between: behind.between };
+    }
     if (stopAt && j > i) {
       const s = p.pos.get(stopAt);
       if (s != null && s > i && j > s) return null;
@@ -204,18 +263,33 @@ export function trainOffset(
   return first;
 }
 
-/** Which direction a train must run to go from one platform to another. */
+/** Shortest in-vehicle minutes riding this direction from → to (Infinity when it doesn't). */
+function rideWithin(line: string, direction: string, fromCode: string, toCode: string): number {
+  let best = Infinity;
+  for (const p of indexedPaths(line, direction, null)) {
+    const i = p.pos.get(fromCode);
+    const j = p.pos.get(toCode);
+    if (i == null || j == null || i === j) continue;
+    if (p.loopTotal == null && j < i) continue;
+    best = Math.min(best, forward(p, i, j)!.minutes);
+  }
+  return best;
+}
+
+/**
+ * Which direction a train must run to go from one platform to another. On
+ * a loop both ways get there: the quicker one.
+ */
 export function directionBetween(fromCode: string, toCode: string): Direction | undefined {
   const a = PLATFORMS[fromCode];
   const b = PLATFORMS[toCode];
   if (!a || !b || a.line !== b.line || fromCode === toCode) return undefined;
-  return Object.values(LINES[a.line].directions).find((d) =>
-    d.paths.some((p) => {
-      const i = p.indexOf(fromCode);
-      const j = p.indexOf(toCode);
-      return i >= 0 && j > i;
-    }),
-  );
+  let best: { d: Direction; min: number } | undefined;
+  for (const d of liveDirections(LINES[a.line])) {
+    const min = rideWithin(a.line, d.key, fromCode, toCode);
+    if (Number.isFinite(min) && (!best || min < best.min)) best = { d, min };
+  }
+  return best?.d;
 }
 
 /** In-vehicle minutes: an observed figure if known, else the sum of hops (to the half minute). */
@@ -224,15 +298,9 @@ export function rideMinutes(fromCode: string, toCode: string): number {
   if (observed != null) return observed;
   const dir = directionBetween(fromCode, toCode);
   if (!dir) return NaN;
-  // The shortest path that rides from → to (a split line may offer two).
-  const options = indexedPaths(PLATFORMS[fromCode].line, dir.key, null)
-    .map((p) => {
-      const i = p.pos.get(fromCode);
-      const j = p.pos.get(toCode);
-      return i != null && j != null && j > i ? p.cum[j] - p.cum[i] : Infinity;
-    })
-    .filter(Number.isFinite);
-  return options.length ? Math.round(Math.min(...options) * 2) / 2 : NaN;
+  // The shortest path that rides from → to (a split line or a loop may offer two).
+  const min = rideWithin(PLATFORMS[fromCode].line, dir.key, fromCode, toCode);
+  return Number.isFinite(min) ? Math.round(min * 2) / 2 : NaN;
 }
 
 export function transferMinutes(fromCode: string, toCode: string): number {
@@ -334,8 +402,8 @@ const CORRIDORS: Corridor[] = (() => {
   const out: Corridor[] = [];
   const seen = new Set<string>();
   for (const line of Object.values(LINES))
-    for (const d of Object.values(line.directions))
-      for (const p of d.paths) {
+    for (const d of liveDirections(line))
+      for (const p of [...d.paths, ...(d.loop ? [d.loop] : [])]) {
         const k = [...p].sort().join(",");
         if (seen.has(k)) continue;
         seen.add(k);

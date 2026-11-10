@@ -31,6 +31,18 @@ export type Direction = {
   alsoBoard?: (Name & { terminal?: string })[];
   /** Platform codes in running order, each path ending at the terminal. */
   paths: string[][];
+  /**
+   * A loop this direction's trains can run all the way round (no terminal),
+   * in running order; the last code runs on to the first. Circle Line since
+   * Stage 6. Spur trains that do end somewhere are still `paths`.
+   */
+  loop?: string[];
+  /**
+   * No longer offered (no platform serves it, new rows are refused). Kept
+   * only so the frozen key still exists; stored rows are read as the
+   * current direction (`LEGACY_DIRECTIONS`).
+   */
+  retired?: true;
 };
 
 export type Line = {
@@ -106,17 +118,27 @@ const TE = [
   "TE16", "TE17", "TE18", "TE19", "TE20", "TE22", "TE23", "TE24", "TE25", "TE26", "TE27", "TE28", "TE29",
 ] as const;
 /**
- * Circle Line since Stage 6 (July 2026): Dhoby Ghaut → … → HarbourFront →
- * Keppel → Cantonment → Prince Edward Road, plus the link Prince Edward
- * Road → Marina Bay (CC33, was CE2) → Bayfront (CC34, was CE1) → Promenade.
- * The exact board destinations of the loop trains could not be confirmed
- * from open sources; see docs/data-sources.md.
+ * Circle Line since Stage 6 (12 July 2026; see docs/data-sources.md): a
+ * full loop, run clockwise and anticlockwise, plus a spur.
+ * Anticlockwise = codes going up: Promenade → Stadium → Paya Lebar → Bishan
+ * → Buona Vista → HarbourFront → Keppel → Cantonment → Prince Edward Road →
+ * Marina Bay (CC33, was CE2) → Bayfront (CC34, was CE1) → Promenade.
+ * The spur (Dhoby Ghaut → Bras Basah → Esplanade → Promenade) runs on round
+ * the loop to Prince Edward Road at weekday peaks ("ends at Prince Edward
+ * Road" / "ends at Dhoby Ghaut"); off-peak it is a Dhoby Ghaut ↔ Stadium
+ * shuttle.
  */
-const CC = [
+const CC_LOOP = [
+  "CC4", "CC5", "CC6", "CC7", "CC8", "CC9", "CC10", "CC11", "CC12", "CC13", "CC14", "CC15", "CC16", "CC17", "CC19", "CC20",
+  "CC21", "CC22", "CC23", "CC24", "CC25", "CC26", "CC27", "CC28", "CC29", "CC30", "CC31", "CC32", "CC33", "CC34",
+] as const;
+/** Spur trains: Dhoby Ghaut … Promenade, then anticlockwise to Prince Edward Road. */
+const CC_SPUR = [
   "CC1", "CC2", "CC3", "CC4", "CC5", "CC6", "CC7", "CC8", "CC9", "CC10", "CC11", "CC12", "CC13", "CC14", "CC15", "CC16",
   "CC17", "CC19", "CC20", "CC21", "CC22", "CC23", "CC24", "CC25", "CC26", "CC27", "CC28", "CC29", "CC30", "CC31", "CC32",
 ] as const;
-const CC_LINK = ["CC32", "CC33", "CC34", "CC4"] as const;
+/** v2.1's Prince Edward Road → Marina Bay → Bayfront → Promenade link (retired TO_PROMENADE). */
+const CC_LINK_V21 = ["CC32", "CC33", "CC34", "CC4"] as const;
 /** Path literal → mutable copy (each direction owns its arrays). */
 const path = (codes: readonly string[]) => [...codes];
 
@@ -212,27 +234,40 @@ export const LINES: Record<LineCode, Line> = {
     color: "#FA9E0D",
     ...SERVICE,
     minutesPerStop: 2,
+    // Keys are frozen (stored rows): TO_PRINCE_EDWARD_ROAD is now the
+    // anticlockwise direction, TO_DHOBY_GHAUT the clockwise one. Platform
+    // screens show "Clockwise" / "Anticlockwise" small with the next
+    // interchange in large type, or "ends at …" for spur / shuttle trains.
     directions: {
       TO_PRINCE_EDWARD_ROAD: {
         key: "TO_PRINCE_EDWARD_ROAD",
         terminal: "CC32",
-        label: n("To Prince Edward Road", "往愛德華太子路"),
-        board: n("Prince Edward Road", "愛德華太子路"),
-        paths: [path(CC), rev(CC_LINK)],
+        alsoTerminals: ["CC6"],
+        label: n("Anticlockwise", "逆時針"),
+        board: n("Anticlockwise", "逆時針"),
+        alsoBoard: [
+          { ...n("Prince Edward Road", "愛德華太子路"), terminal: "CC32" },
+          { ...n("Stadium", "體育場"), terminal: "CC6" },
+        ],
+        paths: [path(CC_SPUR)],
+        loop: path(CC_LOOP),
+      },
+      TO_DHOBY_GHAUT: {
+        key: "TO_DHOBY_GHAUT",
+        terminal: "CC1",
+        label: n("Clockwise", "順時針"),
+        board: n("Clockwise", "順時針"),
+        alsoBoard: [{ ...n("Dhoby Ghaut", "多美歌"), terminal: "CC1" }],
+        paths: [rev(CC_SPUR)],
+        loop: rev(CC_LOOP),
       },
       TO_PROMENADE: {
         key: "TO_PROMENADE",
         terminal: "CC4",
         label: n("To Promenade via Marina Bay", "經濱海灣往寶門廊"),
         board: n("Promenade", "寶門廊"),
-        paths: [path(CC_LINK)],
-      },
-      TO_DHOBY_GHAUT: {
-        key: "TO_DHOBY_GHAUT",
-        terminal: "CC1",
-        label: n("To Dhoby Ghaut", "往多美歌"),
-        board: n("Dhoby Ghaut", "多美歌"),
-        paths: [rev(CC)],
+        paths: [path(CC_LINK_V21)],
+        retired: true,
       },
     },
   },
@@ -432,6 +467,18 @@ export const RIDE_MINUTES: Record<string, number> = {
   "TE2>TE17": 37,
 };
 
+/**
+ * Stored rows whose direction key meant something else before v2.2, read as
+ * the current direction. v2.1 modelled the Circle Line's Marina Bay section
+ * as a "To Promenade" link (Prince Edward Road → Marina Bay → Bayfront →
+ * Promenade: anticlockwise), and "To Prince Edward Road" at Marina Bay /
+ * Bayfront as trains heading back to Prince Edward Road (clockwise).
+ */
+export const LEGACY_DIRECTIONS: readonly { line: LineCode; key: string; stations?: readonly string[]; into: string }[] = [
+  { line: "CCL", key: "TO_PROMENADE", into: "TO_PRINCE_EDWARD_ROAD" },
+  { line: "CCL", key: "TO_PRINCE_EDWARD_ROAD", stations: ["CC33", "CC34"], into: "TO_DHOBY_GHAUT" },
+];
+
 /** Every platform, derived from station codes. */
 export const PLATFORMS: Record<string, Platform> = Object.fromEntries(
   STATIONS.flatMap((station) =>
@@ -440,7 +487,8 @@ export const PLATFORMS: Record<string, Platform> = Object.fromEntries(
       const line = match ? LINE_PREFIX[match[1]] : undefined;
       if (!line) throw new Error(`Bad code ${code}`);
       const path = Object.values(LINES[line].directions)
-        .flatMap((d) => d.paths)
+        .filter((d) => !d.retired)
+        .flatMap((d) => [...d.paths, ...(d.loop ? [d.loop] : [])])
         .find((p) => p.includes(code));
       if (!path) throw new Error(`${code} is on no path of ${line}`);
       return [code, { code, line, station: station.slug, order: path.indexOf(code) + 1 }] as const;

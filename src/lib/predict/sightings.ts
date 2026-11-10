@@ -161,6 +161,8 @@ export function shortTurnStop(line: string, direction: string, from: string, des
     const end = stationForCode(d.terminal)?.name;
     const want = destination.trim();
     if (end && (end.en.toLowerCase() === want.toLowerCase() || end["zh-Hant"] === want)) return null;
+    // Circle Line: "Clockwise" / "Anticlockwise" without "ends at …" is a loop train.
+    if (d.loop && (d.board.en.toLowerCase() === want.toLowerCase() || d.board["zh-Hant"] === want)) return null;
   }
   for (const p of d.paths) {
     const i = p.indexOf(from);

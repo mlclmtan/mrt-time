@@ -4,10 +4,11 @@ import { z } from "zod";
 import { getDb, dbConfigured } from "../db";
 import { journey, place } from "../db/schema";
 import { DIRECTION_KEY_RE, LINE_CODE_LIST, PLATFORM_CODE_RE, findRoutes, getPlatform, getStation, stationForCode } from "../network";
-import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan } from "../journey/plan";
+import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan, type TrainSource } from "../journey/plan";
 import { isRainy, predictionSource } from "../journey/source";
 import { commuteView, type CommuteProgress, type CommuteView } from "../journey/commute";
 import { predictionData, type PredictionData } from "./board";
+import { publicReason } from "../predict/privacy";
 import { forecastFor, twoHourForecast } from "./weather";
 import { affectedLines, lineAlerts } from "./lta";
 
@@ -87,7 +88,8 @@ function ridesOf(legs: Leg[]) {
   return legs.filter((l): l is Extract<Leg, { kind: "ride" }> => l.kind === "ride");
 }
 
-export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Promise<PlanResponse> {
+/** `detail`: the owner sees how trains are known; the public planner gets "seen" reasons only (predict/privacy.ts). */
+export async function planJourney(legs: Leg[], mode: PlanMode, at: number, opts: { detail?: boolean } = {}): Promise<PlanResponse> {
   const rides = ridesOf(legs);
   const codes = [...new Set(rides.map((r) => r.from))];
   const lines = [...new Set(rides.map((r) => r.line))];
@@ -96,7 +98,13 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
     twoHourForecast(),
     lineAlerts().catch(() => null),
   ]);
-  const source = sourceFor(data);
+  const full = sourceFor(data);
+  const source: TrainSource = opts.detail
+    ? full
+    : (leg, around) => {
+        const s = full(leg, around);
+        return s.reason ? { ...s, reason: publicReason(s.reason) } : s;
+      };
   const plans =
     mode === "list" ? planList(legs, at, source, 6) : mode === "leave_by" ? [planLeaveBy(legs, at, source)] : [planForward(legs, at, source)];
   const firstStation = rides[0] ? stationForCode(rides[0].from) : undefined;

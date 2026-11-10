@@ -1,6 +1,6 @@
 "use client";
 import { DoorOpen } from "lucide-react";
-import type { CommuteView, DepartureRow, RideCell } from "@/lib/journey/commute";
+import type { CommuteState, CommuteView, DepartureRow, RideCell } from "@/lib/journey/commute";
 import { LINES } from "@/lib/network/data";
 import { clock, confidenceClass, reasonText } from "@/lib/format";
 import { MINUTE } from "@/lib/time";
@@ -40,7 +40,7 @@ function catchText(t: T, r: RideCell) {
 const catchClass = (r: RideCell) =>
   r.ranged ? "bg-panel-2 text-muted" : r.catch === "tight" ? "bg-bad/15 text-bad" : r.catch === "likely" ? "bg-warn/15 text-warn" : "bg-go/15 text-go";
 
-/** "From a board reading 12 min ago" (age measured from now) / "Typical gap at this hour · every ~6 min". */
+/** "From the platform screen 12 min ago" (age measured from now) / "Typical gap at this hour · every ~6 min". */
 function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
   if (!r.reason) return "";
   const fresh = r.reason.code === "reading_ago" || r.reason.code === "boarded_ago" || r.reason.code === "seen_elsewhere";
@@ -49,8 +49,6 @@ function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
   const base = reasonText(t, r.reason, locale);
   return r.reason.code === "historical_anchor" || r.headwayMin == null ? base : `${base} · ${t("commute.every", { n: r.headwayMin })}`;
 }
-
-export type FinishedPrompt = { arrivedAt: number; what: string; onLog: () => void; onDismiss: () => void };
 
 /** "Leave now" only in the last 30 s before leave-by. */
 export const LEAVE_NOW_MS = 30_000;
@@ -70,49 +68,43 @@ export function leaveHeader(t: T, rows: DepartureRow[], now: number): string {
   return later ? t("commute.missed", { time: clock(later.leaveAt) }) : t("commute.missedOnly");
 }
 
+const MOVING: readonly CommuteState[] = ["on_board", "between"];
+
 export function CommutePanel({
   view,
   now,
   staleAt,
-  finished,
+  tripState,
 }: {
   view: CommuteView | null;
   now: number;
   staleAt: number | null;
   /**
-   * The trip is over (now > expected arrival + 15 min, from `resolveTrip`):
-   * "Arrived ~10:25? Log desk / Dismiss" above the next trip's plan.
+   * Where the owner is right now, from the client's resolver (`resolveTrip`,
+   * updated on the tap itself — before the server's view catches up, and
+   * while offline underground). "finished": the big next-step button asks
+   * "Arrived ~10:25?" (v2.2: only there); this card just plans from now.
    */
-  finished?: FinishedPrompt | null;
+  tripState?: CommuteState;
 }) {
   const { t, locale } = useI18n();
   if (!view) return null;
   const { progress, leaveNow, rows } = view;
-  const prompt = finished ? (
-    <section className="panel rise space-y-3 p-4" data-commute-state="finished">
-      <p className="led text-2xl font-bold">{t("commute.state.finished", { time: clock(finished.arrivedAt) })}</p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-primary" onClick={finished.onLog}>
-          {t("commute.finished.log", { what: finished.what })}
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={finished.onDismiss}>
-          {t("commute.finished.dismiss")}
-        </button>
-      </div>
-    </section>
-  ) : null;
-  // Finished: the view below is the next trip from now (a pre-departure plan).
+  // Finished: the view is the next trip from now (a pre-departure plan).
   const idle = progress.state === "idle" || progress.state === "finished";
-  // Waiting for the server to catch up with a just-finished trip: only the prompt.
-  if (finished && !idle) return prompt;
-  if (!leaveNow) return prompt ?? <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
+  // Waiting for the server to catch up with a just-finished trip: nothing stale.
+  if (tripState === "finished" && !idle) return null;
+  if (!leaveNow) return <p className="panel p-4 text-sm text-muted">{t("commute.empty")}</p>;
+  // On board (or changing trains): no "Next departures" — it would list the
+  // train already boarded. Back once the trip is finished or dismissed.
+  const moving = MOVING.includes(progress.state) || (tripState != null && MOVING.includes(tripState));
+  const departures = moving ? [] : rows;
   const first = rows[0];
   const untilFirst = first ? (first.rides[0]?.boardAt ?? first.leaveAt) - now : 0;
-  const ranged = rows.some((r) => r.ranged);
+  const ranged = departures.some((r) => r.ranged);
 
   return (
-    <div className="space-y-3">
-      {prompt}
+    <div className="space-y-3" data-commute-state={tripState ?? progress.state}>
       {!idle && (
         <p className="text-sm text-accent">
           {t(`commute.state.${progress.state as Exclude<typeof progress.state, "idle" | "finished">}`, { time: clock(progress.startAt) })}
@@ -149,8 +141,12 @@ export function CommutePanel({
               </div>
               <p className="text-xs text-muted">{rideReason(t, r, now || view.generatedAt, locale)}</p>
               {r.tip && (
-                <p className="flex items-center gap-1 text-xs text-led">
-                  <DoorOpen size={12} aria-hidden /> {t("commute.doors")}: {r.tip}
+                // The icon sits on the first line; the whole tip wraps (never cut short).
+                <p className="door-tip flex items-start gap-1.5 text-xs leading-5 text-led">
+                  <DoorOpen size={16} aria-hidden className="mt-0.5 shrink-0" />
+                  <span className="min-w-0 flex-1 break-words whitespace-normal">
+                    {t("commute.doors")}: {r.tip}
+                  </span>
                 </p>
               )}
             </li>
@@ -158,14 +154,14 @@ export function CommutePanel({
         </ul>
       </section>
 
-      {rows.length > 0 && (
+      {departures.length > 0 && (
         <section aria-labelledby="next-departures" className="panel p-4">
           <h2 id="next-departures" className="font-semibold">
             {t("commute.title")}
           </h2>
           {ranged && <p className="mt-1 text-xs text-warn">{t("commute.ranged")}</p>}
           <ol className="mt-2 divide-y divide-line">
-            {rows.map((row) => (
+            {departures.map((row) => (
               <li key={row.leaveAt} className="py-2">
                 {/* Line 1: leave → arrive. Line 2: board leg 1 → transfer catch → board leg 2. */}
                 <div className="flex items-baseline justify-between gap-2">

@@ -9,7 +9,7 @@ import { BoardingButtons } from "./boarding/boarding-buttons";
 import { GeoSuggest } from "./geo/geo-suggest";
 
 /**
- * Add a reading on one screen: 1 station → 2 which way → 3 the minutes on
+ * Log a train (internally "add a reading") on one screen: 1 station → 2 which way → 3 the minutes on
  * the board. Time seen is now unless changed. Built for one hand at 393×852.
  */
 export function AddReading({ defaultStation, defaultDirection }: { defaultStation?: string | null; defaultDirection?: string | null }) {

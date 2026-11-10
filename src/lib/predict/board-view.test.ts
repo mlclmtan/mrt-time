@@ -39,7 +39,7 @@ describe("station board view-model", () => {
         const html = renderToStaticMarkup(createElement(DirectionTimes, { view, now }));
         expect(html).toMatch(/≈\d\d:\d\d/);
         expect(html).toContain("Estimate");
-        expect(html).toContain("no board reading yet today");
+        expect(html).toContain("no platform screen logged today yet");
         expect(html).not.toMatch(/Every ~|Wait 0–/);
       }
   });
@@ -83,7 +83,7 @@ describe("station board view-model", () => {
     expect(html).toContain(">10:24<");
     expect(html).toContain("≈10:29");
     expect(html).toContain("in 1 min");
-    expect(html).toContain("From a board reading 3 min ago");
+    expect(html).toContain("From the platform screen 3 min ago");
   });
 
   describe("v2.1.1 live check (Tue 10 Nov 12:10, a 10:21 reading on Mon 2 Nov, a train seen today at 10:14)", () => {
@@ -99,10 +99,10 @@ describe("station board view-model", () => {
       expect(p.reason.params.date).toBe("2026-11-02");
       const view = directionView(p, now, "EWL");
       if (view.state === "closed") throw new Error("closed");
-      expect(boardReasonText(en, view.reason)).toBe("Based on a board reading at 10:21 on Mon 2 Nov, no board reading yet today");
-      expect(boardReasonText(makeT("zh-Hant"), view.reason, "zh-Hant")).toBe("根據11月2日（週一） 10:21 的顯示屏讀數，今天尚未有讀數");
+      expect(boardReasonText(en, view.reason)).toBe("Based on the platform screen at 10:21 on Mon 2 Nov; none logged today yet");
+      expect(boardReasonText(makeT("zh-Hant"), view.reason, "zh-Hant")).toBe("根據11月2日（週一） 10:21 的月台顯示屏；今天尚未有記錄");
       // Planner / Home ride reasons too.
-      expect(reasonText(en, p.reason)).toBe("Based on a reading at 10:21 on Mon 2 Nov");
+      expect(reasonText(en, p.reason)).toBe("Based on the platform screen at 10:21 on Mon 2 Nov");
       expect(formatDay("2026-11-02", "en")).toBe("Mon 2 Nov");
     });
 
@@ -112,8 +112,8 @@ describe("station board view-model", () => {
       if (view.state === "closed") throw new Error("closed");
       expect(view.reason).toEqual({ code: "stale_today", seenAt: at(NOV10, "10:14"), basis: { code: "historical_anchor", clock: "10:21", date: "2026-11-02" } });
       const text = boardReasonText(en, view.reason);
-      expect(text).toBe("Last train seen today at 10:14 is too long ago to use; estimated from a board reading at 10:21 on Mon 2 Nov");
-      expect(text).not.toContain("no board reading yet today");
+      expect(text).toBe("Last train seen today at 10:14 is too long ago to use; estimated from the platform screen at 10:21 on Mon 2 Nov");
+      expect(text).not.toContain("no platform screen logged today yet");
       // The typical-gap basis reads the same way.
       const band = directionView(predict({ ...ctx, now, observations: [] }), now, "EWL", at(NOV10, "10:14"));
       if (band.state === "closed") throw new Error("closed");

@@ -22,6 +22,7 @@ export type ReasonCode =
   | "reading_ago" // { minutes }
   | "boarded_ago" // { minutes } someone boarded / got off a train here
   | "seen_elsewhere" // { station, minutes, hops } the same train seen at another station
+  | "seen_ago" // { minutes } visitors' view of boarded_ago / seen_elsewhere (no source; see privacy.ts)
   | "historical_anchor" // { clock, date (SGT "YYYY-MM-DD"), gap }
   | "repeats" // { days } clock times repeated on recent days
   | "observed_gap" // { headway, count }
