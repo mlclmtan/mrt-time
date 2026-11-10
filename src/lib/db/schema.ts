@@ -140,6 +140,10 @@ export const trainSighting = pgTable(
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     deviceId: text("device_id"),
     ipHash: text("ip_hash"),
+    /** ± minutes on `at` (v2.1): tap at Now 0.5, chosen time 1. Null on older rows → default by kind. */
+    errorMin: real("error_min"),
+    /** Set when the time / platform was edited after logging (not scored for accuracy). */
+    editedAt: ts("edited_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
     reviewedAt: ts("reviewed_at"),
   },

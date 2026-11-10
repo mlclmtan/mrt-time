@@ -1,6 +1,7 @@
 /** Prediction accuracy: compare what we predicted with when the owner boarded. */
 import { MINUTE } from "../time";
-import { predict } from "./index";
+import { predict, type PredictEngine } from "./index";
+import type { RideOverrides } from "../network";
 import { timeBand } from "./bands";
 import type { TrainSighting } from "./sightings";
 import type { Observation, Prediction, UnstableWindow } from "./types";
@@ -48,7 +49,7 @@ export type BacktestRow = { line: string; station: string; band: string; hit: bo
 export function backtestSightings(
   sightings: TrainSighting[],
   observations: Observation[],
-  opts: { unstableWindows?: UnstableWindow[]; windowsCustom?: boolean; limit?: number } = {},
+  opts: { unstableWindows?: UnstableWindow[]; windowsCustom?: boolean; limit?: number; engine?: PredictEngine; rides?: RideOverrides | null } = {},
 ): BacktestRow[] {
   const targets = sightings
     .filter((s) => s.status === "approved" && s.kind === "boarded" && scorableBoarding(s))
@@ -68,6 +69,8 @@ export function backtestSightings(
       sightings: known,
       unstableWindows: opts.unstableWindows,
       windowsCustom: opts.windowsCustom,
+      engine: opts.engine,
+      rides: opts.rides,
     });
     const check = scorePrediction(p, target.at);
     return { line: target.line, station: target.station, band: timeBand(target.at), hit: check.hit, errorMin: check.errorMin, basis: p.basis };

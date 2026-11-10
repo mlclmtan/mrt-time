@@ -67,13 +67,34 @@ export function sightingApprovalStatus(candidateAt: number, known: { at: number;
   return consistent ? "approved" : "pending";
 }
 
-/* ---------- Rate limiting (device + daily IP hash) ---------- */
+/* ---------- Rate limiting (device + daily IP hash, and the IP hash alone) ---------- */
 
 export const PUBLIC_READING_LIMIT = 10;
+/** Per network (daily IP hash) whatever device id is sent: rotating ids can't get around it. */
+export const PUBLIC_IP_LIMIT = 20;
 export const RATE_WINDOW_MS = 60 * MINUTE;
 
 export function rateLimitKey(deviceId: string | null | undefined, ipHash: string | null | undefined) {
   return `${(deviceId || "nodevice").slice(0, 64)}:${(ipHash || "noip").slice(0, 64)}`;
+}
+export function ipRateLimitKey(ipHash: string | null | undefined) {
+  return `ip:${(ipHash || "noip").slice(0, 64)}`;
+}
+
+/**
+ * Both public buckets: 10/hour per device + network and 20/hour per network
+ * (the device id is client-supplied, so it alone can't be the limit).
+ */
+export async function hitPublicLimits(
+  limiters: { device: RateLimiter; ip: RateLimiter },
+  deviceId: string | null | undefined,
+  ipHash: string | null | undefined,
+  now: number,
+): Promise<{ allowed: boolean; bucket?: "ip" | "device" }> {
+  const ip = await limiters.ip.hit(ipRateLimitKey(ipHash), now);
+  if (!ip.allowed) return { allowed: false, bucket: "ip" };
+  const device = await limiters.device.hit(rateLimitKey(deviceId, ipHash), now);
+  return device.allowed ? { allowed: true } : { allowed: false, bucket: "device" };
 }
 
 export interface RateLimiter {

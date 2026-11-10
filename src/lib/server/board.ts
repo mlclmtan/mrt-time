@@ -1,9 +1,11 @@
 /** Live board for a station / one platform direction (shared by API + pages). */
-import { directionsAt, getLine, getPlatform, getStation, inService, LINES, type LineCode } from "../network";
+import { directionsAt, getLine, getPlatform, getStation, inService, LINES, type LineCode, type RideOverrides } from "../network";
 import { platformTrains, predict, type Observation, type Prediction, type TrainSighting } from "../predict";
 import { sgtDate } from "../time";
 import { getWindowSettings, loadObservations, type WindowSettings } from "./observations";
 import { loadSightings } from "./sightings";
+import { learnedRides } from "./rides";
+import { affectedLines, lineAlerts } from "./lta";
 
 /** One train seen today at this platform: when, and how we know. */
 export type SeenTrain = {
@@ -38,7 +40,10 @@ export type Board = { station: string; now: number; platforms: BoardPlatform[] }
 export const SEEN_TODAY_MAX = 12;
 
 /** Trains known at a platform today that have already come (not future propagated ones). */
-export function seenToday(input: { station: string; line: string; direction: string; observations: Observation[]; sightings: TrainSighting[] }, now: number): SeenTrain[] {
+export function seenToday(
+  input: { station: string; line: string; direction: string; observations: Observation[]; sightings: TrainSighting[]; propagate?: boolean; rides?: RideOverrides | null },
+  now: number,
+): SeenTrain[] {
   const today = sgtDate(now);
   return platformTrains(input)
     .filter((t) => sgtDate(t.at) === today && t.at <= now && t.seenAt <= now)
@@ -52,24 +57,49 @@ export function seenToday(input: { station: string; line: string; direction: str
     }));
 }
 
-type Data = { observations: Observation[]; sightings: TrainSighting[]; settings: WindowSettings };
+export type PredictionData = {
+  observations: Observation[];
+  sightings: TrainSighting[];
+  settings: WindowSettings;
+  /** Lines with an active LTA disruption alert: sightings stay at their own platform there. */
+  pausedLines: string[];
+  /** Ride minutes learned from the owner's trips. */
+  rides: RideOverrides;
+};
+type Data = PredictionData;
 
-async function loadFor(codes: string[], lines: string[], now: number): Promise<Data> {
-  const [observations, sightings, settings] = await Promise.all([loadObservations(codes, lines, now), loadSightings(lines, now), getWindowSettings(now)]);
-  return { observations, sightings, settings };
+/** LTA alert line codes → ours (the airport branch and the old Circle Line extension included). */
+const ALERT_LINE: Record<string, string> = { CGL: "EWL", CEL: "CCL" };
+export function pausedFromAlerts(lines: string[]): string[] {
+  return [...new Set(lines.map((l) => ALERT_LINE[l] ?? l))];
 }
 
-function predictWith(data: Data, line: string, direction: string, station: string, now: number) {
-  return predict({
-    line,
-    direction,
-    station,
-    now,
+async function loadFor(codes: string[], lines: string[], now: number): Promise<Data> {
+  const [observations, sightings, settings, rides, alerts] = await Promise.all([
+    loadObservations(codes, lines, now),
+    loadSightings(lines, now),
+    getWindowSettings(now),
+    learnedRides(lines, now),
+    lineAlerts().catch(() => null),
+  ]);
+  return { observations, sightings, settings, rides, pausedLines: pausedFromAlerts(affectedLines(alerts)) };
+}
+
+/** Every per-platform prediction input that comes from the loaded data. */
+export function predictOptions(data: Data, line: string) {
+  return {
     observations: data.observations,
     sightings: data.sightings,
     unstableWindows: data.settings.windows,
     windowsCustom: data.settings.custom,
-  });
+    engine: data.settings.engine,
+    propagate: !data.pausedLines.includes(line),
+    rides: data.rides,
+  };
+}
+
+function predictWith(data: Data, line: string, direction: string, station: string, now: number) {
+  return predict({ line, direction, station, now, ...predictOptions(data, line) });
 }
 
 export async function stationBoard(slug: string, now = Date.now()): Promise<Board | null> {
@@ -95,7 +125,7 @@ export async function stationBoard(slug: string, now = Date.now()): Promise<Boar
           board: d.board,
           terminal: d.terminal,
           prediction: predictWith(data, line.code, d.key, code, now),
-          seenToday: seenToday({ station: code, line: line.code, direction: d.key, observations: data.observations, sightings: data.sightings }, now),
+          seenToday: seenToday({ station: code, line: line.code, direction: d.key, ...predictOptions(data, line.code) }, now),
         })),
       };
     }),
@@ -108,8 +138,8 @@ export async function platformPrediction(code: string, direction: string, now = 
   if (!platform || !getLine(platform.line)?.directions[direction]) return null;
   const data = await loadFor([code], [platform.line], now);
   if (opts.excludeTripEventId != null) data.sightings = data.sightings.filter((s) => s.tripEventId !== opts.excludeTripEventId);
-  // Only what was known before this moment.
-  data.sightings = data.sightings.filter((s) => s.at < now);
+  // Only what had been recorded by this moment.
+  data.sightings = data.sightings.filter((s) => s.at < now && (s.recordedAt ?? s.at) <= now);
   data.observations = data.observations.filter((o) => o.capturedAt <= now);
   return predictWith(data, platform.line, direction, code, now);
 }

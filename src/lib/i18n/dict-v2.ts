@@ -53,6 +53,10 @@ export const v2En = {
   "kind.arrived": "Arrived",
 
   "owner.logTitle": "Log a step",
+  "admin.engine": "Predictor",
+  "admin.engine.help": "Kill switch: v1 uses board readings at each platform only (no boardings, no times passed along the line, no learning). Takes effect within a minute everywhere.",
+  "admin.engine.v2": "v2 (boardings + learning)",
+  "admin.engine.v1": "v1 (board readings only)",
   "timeline.title": "Today's trip ({n})",
   "timeline.empty": "Nothing logged today yet.",
   "timeline.totals": "Walking {walk} min · waiting {wait} min · on trains {ride} min · changing {change} min",
@@ -139,6 +143,10 @@ export const v2Zh: Record<keyof typeof v2En, string> = {
   "kind.arrived": "已抵達",
 
   "owner.logTitle": "記錄一步",
+  "admin.engine": "預測引擎",
+  "admin.engine.help": "緊急開關：v1 只用各月台的顯示屏讀數（不用上落車記錄、不沿線推算、不學習）。一分鐘內全站生效。",
+  "admin.engine.v2": "v2（上落車記錄＋學習）",
+  "admin.engine.v1": "v1（只用顯示屏讀數）",
   "timeline.title": "今天的行程（{n}）",
   "timeline.empty": "今天還沒有記錄。",
   "timeline.totals": "步行 {walk} 分鐘 · 候車 {wait} 分鐘 · 乘車 {ride} 分鐘 · 轉車 {change} 分鐘",

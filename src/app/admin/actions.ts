@@ -8,7 +8,7 @@ import { adCampaign, adCreative, appSetting, campaign, experiment, kol, observat
 import { parseCampaignForm, parseCreativeForm } from "@/lib/ads/admin-input";
 import { clearAdCatalog } from "@/lib/server/ads";
 import { buildCampaignUrl, utmToken } from "@/lib/analytics/utm";
-import { clearWindowsCache } from "@/lib/server/observations";
+import { ENGINE_SETTING_KEY, clearWindowsCache } from "@/lib/server/observations";
 import { appUrl } from "@/lib/seo";
 import { parseWindows } from "@/lib/server/admin";
 
@@ -130,6 +130,18 @@ export async function saveUnstableWindows(formData: FormData) {
     .insert(appSetting)
     .values({ key: "unstable_windows", value: windows })
     .onConflictDoUpdate({ target: appSetting.key, set: { value: windows, updatedAt: new Date() } });
+  clearWindowsCache();
+  revalidatePath("/admin/settings");
+}
+
+/** Kill switch: "v1" puts the v1.2 predictor back everywhere (takes effect within a minute). */
+export async function saveEngine(formData: FormData) {
+  await owner();
+  const engine = formData.get("engine") === "v1" ? "v1" : "v2";
+  await getDb()
+    .insert(appSetting)
+    .values({ key: ENGINE_SETTING_KEY, value: { engine } })
+    .onConflictDoUpdate({ target: appSetting.key, set: { value: { engine }, updatedAt: new Date() } });
   clearWindowsCache();
   revalidatePath("/admin/settings");
 }

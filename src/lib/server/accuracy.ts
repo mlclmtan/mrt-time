@@ -5,6 +5,7 @@ import { backtestSightings, type BacktestRow } from "../predict/accuracy";
 import { median } from "../time";
 import { getWindowSettings, observationStore } from "./observations";
 import { sightingStore } from "./sightings";
+import { learnedRides } from "./rides";
 
 export type AccuracyGroup = { key: string; scored: number; hits: number; ranges: number; medianErrorMin: number | null };
 
@@ -28,10 +29,11 @@ export function groupBacktest(rows: BacktestRow[], by: "line" | "band" | "statio
 export async function sightingAccuracy(now = Date.now()): Promise<BacktestRow[]> {
   if (!dbConfigured()) return [];
   const db = getDb();
-  const [sightings, observations, settings] = await Promise.all([
+  const [sightings, observations, settings, rides] = await Promise.all([
     sightingStore(db).forLines(LINE_CODES, now),
     observationStore(db).forLines(LINE_CODES, now),
     getWindowSettings(now),
+    learnedRides(LINE_CODES, now),
   ]);
-  return backtestSightings(sightings, observations, { unstableWindows: settings.windows, windowsCustom: settings.custom });
+  return backtestSightings(sightings, observations, { unstableWindows: settings.windows, windowsCustom: settings.custom, engine: settings.engine, rides });
 }

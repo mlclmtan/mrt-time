@@ -3,11 +3,12 @@ import { z } from "zod";
 import { getDb } from "../db";
 import { observation } from "../db/schema";
 import { DIRECTION_KEY_RE, PLATFORM_CODE_RE, getPlatform, isValidDirection } from "../network";
-import { autoApprovalStatus, CONSISTENCY_WINDOW_MIN, PUBLIC_READING_LIMIT, rateLimitKey, type RateLimiter } from "../predict/readings";
+import { autoApprovalStatus, CONSISTENCY_WINDOW_MIN, PUBLIC_IP_LIMIT, PUBLIC_READING_LIMIT, hitPublicLimits } from "../predict/readings";
 import type { ReadingSource, ReadingStatus } from "../predict";
 import { MINUTE } from "../time";
 import { observationStore } from "./observations";
 import { platformPrediction } from "./board";
+import { DbRateLimiter } from "./rate-limit";
 
 export const readingInput = z
   .strictObject({
@@ -88,7 +89,13 @@ export async function saveReading(
   return { ok: true as const, id: row?.id ?? null, status, line: platform.line };
 }
 
-export async function publicRateLimit(limiter: RateLimiter, deviceId: string | null, ipHash: string | null, now: number) {
-  return limiter.hit(rateLimitKey(deviceId, ipHash), now);
+/** Public readings and sightings share both buckets: 10/h per device + network, 20/h per network. */
+export async function publicRateLimit(deviceId: string | null, ipHash: string | null, now: number) {
+  return hitPublicLimits(
+    { device: new DbRateLimiter("public_reading", PUBLIC_READING_LIMIT), ip: new DbRateLimiter("public_ip", PUBLIC_IP_LIMIT) },
+    deviceId,
+    ipHash,
+    now,
+  );
 }
-export { PUBLIC_READING_LIMIT };
+export { PUBLIC_READING_LIMIT, PUBLIC_IP_LIMIT };

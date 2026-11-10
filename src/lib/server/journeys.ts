@@ -7,7 +7,7 @@ import { DIRECTION_KEY_RE, LINE_CODE_LIST, PLATFORM_CODE_RE, findRoutes, getPlat
 import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan } from "../journey/plan";
 import { isRainy, predictionSource } from "../journey/source";
 import { commuteView, type CommuteProgress, type CommuteView } from "../journey/commute";
-import { predictionData } from "./board";
+import { predictionData, type PredictionData } from "./board";
 import { forecastFor, twoHourForecast } from "./weather";
 import { affectedLines, lineAlerts } from "./lta";
 
@@ -72,6 +72,17 @@ export type PlanResponse = {
   alertLines: string[];
 };
 
+/** Planner trains from the loaded data (engine, disruption pause and learned rides included). */
+function sourceFor(data: PredictionData) {
+  return predictionSource(data.observations, data.settings.windows, {
+    sightings: data.sightings,
+    windowsCustom: data.settings.custom,
+    engine: data.settings.engine,
+    pausedLines: data.pausedLines,
+    rides: data.rides,
+  });
+}
+
 function ridesOf(legs: Leg[]) {
   return legs.filter((l): l is Extract<Leg, { kind: "ride" }> => l.kind === "ride");
 }
@@ -85,7 +96,7 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
     twoHourForecast(),
     lineAlerts().catch(() => null),
   ]);
-  const source = predictionSource(data.observations, data.settings.windows, { sightings: data.sightings, windowsCustom: data.settings.custom });
+  const source = sourceFor(data);
   const plans =
     mode === "list" ? planList(legs, at, source, 6) : mode === "leave_by" ? [planLeaveBy(legs, at, source)] : [planForward(legs, at, source)];
   const firstStation = rides[0] ? stationForCode(rides[0].from) : undefined;
@@ -109,9 +120,7 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number): Prom
 export async function commuteFor(journey: OwnerJourney, progress: CommuteProgress, now: number): Promise<CommuteView> {
   const rides = ridesOf(journey.legs.slice(progress.fromLeg));
   const data = await predictionData([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => null);
-  const source = data
-    ? predictionSource(data.observations, data.settings.windows, { sightings: data.sightings, windowsCustom: data.settings.custom })
-    : predictionSource([], undefined);
+  const source = data ? sourceFor(data) : predictionSource([], undefined);
   return commuteView(journey.key, journey.legs, progress, source, now);
 }
 

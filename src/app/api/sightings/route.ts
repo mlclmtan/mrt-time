@@ -4,9 +4,8 @@ import { dbConfigured, getDb } from "@/lib/db";
 import { trainSighting } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/server";
 import { json, noDb, readJson, sameOrigin } from "@/lib/server/http";
-import { PUBLIC_READING_LIMIT, publicRateLimit } from "@/lib/server/readings";
-import { DbRateLimiter } from "@/lib/server/rate-limit";
-import { savePublicSighting, sightingInput, sightingTimeOk } from "@/lib/server/sightings";
+import { publicRateLimit } from "@/lib/server/readings";
+import { PUBLIC_MAX_BACKDATE_MS, savePublicSighting, sightingInput, sightingTimeOk } from "@/lib/server/sightings";
 import { logTripEvent, undoTripEvent } from "@/lib/server/trips";
 import { clientIp, dailyIpHash } from "@/lib/analytics/request";
 import { timed } from "@/lib/server/metrics";
@@ -21,11 +20,12 @@ const deviceFrom = (request: Request) => {
 };
 
 /**
- * POST /api/sightings — "I boarded" / "Got off" `{ station, direction, kind: boarded|alighted, at }`
- * (`at` up to 12 h back). The owner's taps become trip events (and their
- * sighting); anyone else shares the board-reading rate limit (10/hour per
- * device + daily IP hash) and is auto-approved only when consistent with
- * trains already known there.
+ * POST /api/sightings — "I boarded" / "Got off" `{ station, direction, kind: boarded|alighted, at, timeSource? }`.
+ * The owner's taps (up to 12 h back) become trip events (and their
+ * sighting); anyone else (up to 30 min back) shares the board-reading rate
+ * limits (10/hour per device + daily IP hash, 20/hour per IP hash) and is
+ * auto-approved only when consistent with trains the owner / Hermes put
+ * there, or when a second network reports the same train.
  */
 export const POST = timed("/api/sightings", async (request) => {
   if (!sameOrigin(request)) return json({ error: "Invalid origin" }, 403);
@@ -46,12 +46,14 @@ export const POST = timed("/api/sightings", async (request) => {
       station: parsed.data.station,
       line: platform?.line,
       direction: parsed.data.direction,
+      ...(parsed.data.timeSource ? { timeSource: parsed.data.timeSource } : {}),
     });
     return json({ ok: true, status: "approved", id: saved.sightingId, clientId, tripEventId: saved.id }, 201);
   }
+  if (!sightingTimeOk(at, now, PUBLIC_MAX_BACKDATE_MS)) return json({ error: "Times can be at most 30 minutes back." }, 400);
   const deviceId = deviceFrom(request);
   const ipHash = dailyIpHash(clientIp(request.headers), now);
-  const limit = await publicRateLimit(new DbRateLimiter("public_reading", PUBLIC_READING_LIMIT), deviceId, ipHash, now);
+  const limit = await publicRateLimit(deviceId, ipHash, now);
   if (!limit.allowed) return json({ error: "Thanks! That's the limit for this hour.", status: "rate_limited" }, 429);
   const saved = await savePublicSighting(parsed.data, { deviceId, ipHash, now });
   return saved.ok ? json(saved, 201) : json({ error: saved.error }, 400);

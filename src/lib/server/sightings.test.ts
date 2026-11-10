@@ -59,7 +59,9 @@ describe("trip events create train sightings", () => {
     const first = await backfillSightings(db as never);
     const second = await backfillSightings(db as never);
     expect(first.written).toBe(1); // the remaining alight event
+    expect(first.errors).toBe(1); // v2.1: error filled from the event's logging lag
     expect(second.written).toBe(1);
+    expect(second.errors).toBe(0); // idempotent: only rows without an error
     expect((await db.select().from(schema.trainSighting)).length).toBe(1);
   });
 });
@@ -74,7 +76,11 @@ describe("public sightings", () => {
     expect(odd).toMatchObject({ ok: true, status: "pending" });
     const tooOld = await savePublicSighting({ station: "EW17", direction: "TO_EAST", kind: "boarded", at: T("10:00").replace("2026-11-10", "2026-11-09") }, { deviceId: "d", ipHash: "h", now });
     expect(tooOld.ok).toBe(false);
-    expect((await loadSightings(["EWL"], now)).every((s) => s.status === "approved")).toBe(true);
+    // Loaded: approved ones, plus public ones awaiting review (they count only when two networks agree).
+    expect((await loadSightings(["EWL"], now)).every((s) => s.status === "approved" || (s.status === "pending" && s.source === "public"))).toBe(true);
+    // Public taps: at most 30 min back.
+    const back40 = await savePublicSighting({ station: "EW17", direction: "TO_EAST", kind: "boarded", at: T("09:50") }, { deviceId: "d", ipHash: "h", now });
+    expect(back40.ok).toBe(false);
   });
 
   it("the station board lists trains seen today, newest first", async () => {
@@ -88,5 +94,97 @@ describe("public sightings", () => {
     const tanjongPagar = await stationBoard("tanjong-pagar", sgtInstant("2026-11-10", "10:40"));
     const tp = tanjongPagar!.platforms[0].directions.find((d) => d.key === "TO_EAST")!;
     expect(tp.seenToday[0]).toMatchObject({ how: "passed", from: "EW16" });
+  });
+});
+
+describe("v2.1 review follow-up (server)", () => {
+  const D = "2026-11-12";
+  const T2 = (clock: string) => new Date(sgtInstant(D, clock)).toISOString();
+  const ms = (clock: string) => sgtInstant(D, clock);
+
+  it("stores the tap error: Now ±0.5, moved back with the chips ±1 (or late without a hint)", async () => {
+    const now = await logTripEvent(USER, { clientId: uuid(21), kind: "board", at: T2("08:00"), station: "EW17", direction: "TO_EAST", timeSource: "now" }, "owner", ms("08:00") + 3_000);
+    const chosen = await logTripEvent(USER, { clientId: uuid(22), kind: "board", at: T2("08:30"), station: "EW17", direction: "TO_EAST", timeSource: "chosen" }, "owner", ms("08:31"));
+    const late = await logTripEvent(USER, { clientId: uuid(23), kind: "board", at: T2("09:00"), station: "EW17", direction: "TO_EAST" }, "owner", ms("09:05"));
+    const err = async (id: number | null) => (await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.id, id!)))[0].errorMin;
+    expect(await err(now.sightingId)).toBe(0.5);
+    expect(await err(chosen.sightingId)).toBe(1);
+    expect(await err(late.sightingId)).toBe(1);
+  });
+
+  it("'Got off' inherits the direction of the boarding before it", async () => {
+    await logTripEvent(USER, { clientId: uuid(31), kind: "board", at: T2("10:14"), station: "EW17", direction: "TO_EAST" }, "owner", ms("10:14"));
+    const off = await logTripEvent(USER, { clientId: uuid(32), kind: "alight", at: T2("10:17"), station: "EW16", direction: "TO_WEST" }, "owner", ms("10:17"));
+    const [ev] = await db.select().from(schema.tripEvent).where(eq(schema.tripEvent.id, off.id!));
+    expect(ev.direction).toBe("TO_EAST");
+    const [s] = await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.id, off.sightingId!));
+    expect(s.direction).toBe("TO_EAST");
+    // A different line keeps its own direction.
+    const tel = await logTripEvent(USER, { clientId: uuid(33), kind: "alight", at: T2("10:25"), station: "TE19", direction: "TO_BAYSHORE" }, "owner", ms("10:25"));
+    expect((await db.select().from(schema.tripEvent).where(eq(schema.tripEvent.id, tel.id!)))[0].direction).toBe("TO_BAYSHORE");
+  });
+
+  it("scores a boarding from the prediction taken before it was written; back-dated or edited ones are not scored", async () => {
+    const fresh = await logTripEvent(USER, { clientId: uuid(41), kind: "board", at: T2("12:00"), station: "EW15", direction: "TO_WEST" }, "owner", ms("12:00") + 5_000);
+    const checks = async (id: number | null) => db.select().from(schema.predictionCheck).where(eq(schema.predictionCheck.tripEventId, id!));
+    const [check] = await checks(fresh.id);
+    expect(check).toBeDefined();
+    // The snapshot could not see the boarding itself (no same-day train here before it).
+    expect(check.basis).not.toBe("same_day");
+    const backdated = await logTripEvent(USER, { clientId: uuid(42), kind: "board", at: T2("12:30"), station: "EW15", direction: "TO_WEST" }, "owner", ms("12:36"));
+    expect(await checks(backdated.id)).toEqual([]);
+    // Editing a boarding removes its score and marks the sighting edited.
+    await updateTripEvent(USER, { id: fresh.id!, at: T2("12:01") });
+    expect(await checks(fresh.id)).toEqual([]);
+    const [s] = await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.tripEventId, fresh.id!));
+    expect(s.editedAt).not.toBeNull();
+    expect(new Date(s.at).toISOString()).toBe(T2("12:01"));
+    expect(s.errorMin).toBe(1);
+  });
+
+  it("two public networks agreeing within 1 min approve each other; one network alone can't", async () => {
+    const now = ms("14:05");
+    const a = await savePublicSighting({ station: "NS13", direction: "TO_JURONG_EAST", kind: "boarded", at: T2("14:00") }, { deviceId: "dev-aaaa1", ipHash: "net-a", now });
+    const a2 = await savePublicSighting({ station: "NS13", direction: "TO_JURONG_EAST", kind: "boarded", at: T2("14:00") }, { deviceId: "dev-aaaa2", ipHash: "net-a", now });
+    expect([a.ok && a.status, a2.ok && a2.status]).toEqual(["pending", "pending"]);
+    const b = await savePublicSighting({ station: "NS13", direction: "TO_JURONG_EAST", kind: "boarded", at: new Date(ms("14:00") + 30_000).toISOString() }, { deviceId: "dev-bbbb1", ipHash: "net-b", now });
+    expect(b).toMatchObject({ ok: true, status: "approved" });
+    const rows = await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.station, "NS13"));
+    expect(rows.every((r) => r.status === "approved")).toBe(true);
+    // Agreed public taps now pass along the line.
+    const board = await stationBoard("khatib", now + 5 * 60_000);
+    const dir = board!.platforms[0].directions.find((d) => d.key === "TO_JURONG_EAST")!;
+    expect(dir.seenToday.some((t) => t.how === "passed")).toBe(true);
+  });
+
+  it("the old Hermes ingest body (readings + trip events, no new fields) still succeeds", async () => {
+    const saved = { token: process.env.INGEST_TOKEN, emails: process.env.ALLOWED_EMAILS };
+    process.env.INGEST_TOKEN = "test-token";
+    process.env.ALLOWED_EMAILS = "owner@example.test";
+    try {
+      const { POST } = await import("@/app/api/ingest/route");
+      const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+      const body = {
+        readings: [{ station: "TE17", direction: "TO_BAYSHORE", minutes: [3, 9], capturedAt: ago(40) }],
+        tripEvents: [
+          { clientId: uuid(61), kind: "board", at: ago(37), station: "TE17", line: "TEL", direction: "TO_BAYSHORE" },
+          { clientId: uuid(62), kind: "alight", at: ago(34), station: "TE19", line: "TEL", direction: "TO_BAYSHORE" },
+        ],
+      };
+      const res = await POST(new Request("http://x/api/ingest", { method: "POST", headers: { authorization: "Bearer test-token", "content-type": "application/json" }, body: JSON.stringify(body) }));
+      expect(res.status).toBe(201);
+      const json = (await res.json()) as { readings: { ok: boolean }[]; tripEvents: { ok: boolean; sightingId: number | null }[] };
+      expect(json.readings.every((r) => r.ok)).toBe(true);
+      expect(json.tripEvents.every((r) => r.ok && r.sightingId != null)).toBe(true);
+      const hermes = await db.select().from(schema.trainSighting).where(eq(schema.trainSighting.source, "hermes"));
+      expect(hermes).toHaveLength(2);
+      // Logged long after the fact: ±1 min, and never scored.
+      expect(hermes.every((h) => h.errorMin === 1)).toBe(true);
+    } finally {
+      process.env.INGEST_TOKEN = saved.token;
+      process.env.ALLOWED_EMAILS = saved.emails;
+      if (saved.token === undefined) delete process.env.INGEST_TOKEN;
+      if (saved.emails === undefined) delete process.env.ALLOWED_EMAILS;
+    }
   });
 });

@@ -3,8 +3,7 @@ import { dbConfigured, getDb } from "@/lib/db";
 import { observation } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/server";
 import { json, noDb, readJson, sameOrigin } from "@/lib/server/http";
-import { parseReadingBody, saveReading, publicRateLimit, PUBLIC_READING_LIMIT, PUBLIC_SEEN_AGO_MAX_MIN } from "@/lib/server/readings";
-import { DbRateLimiter } from "@/lib/server/rate-limit";
+import { parseReadingBody, saveReading, publicRateLimit, PUBLIC_SEEN_AGO_MAX_MIN } from "@/lib/server/readings";
 import { clientIp, dailyIpHash } from "@/lib/analytics/request";
 import { timed } from "@/lib/server/metrics";
 import { MINUTE } from "@/lib/time";
@@ -41,7 +40,7 @@ export const POST = timed("/api/readings", async (request) => {
   if (parsed.capturedAt && Date.parse(parsed.capturedAt) < now - PUBLIC_SEEN_AGO_MAX_MIN * MINUTE)
     return json({ error: "Readings can be at most 30 minutes old." }, 400);
   const ipHash = dailyIpHash(clientIp(request.headers), now);
-  const limit = await publicRateLimit(new DbRateLimiter("public_reading", PUBLIC_READING_LIMIT), deviceId, ipHash, now);
+  const limit = await publicRateLimit(deviceId, ipHash, now);
   if (!limit.allowed) return json({ error: "Thanks! That's the limit for this hour.", status: "rate_limited" }, 429);
   const saved = await saveReading(parsed, { source: "public", deviceId, ipHash, now });
   return saved.ok ? json(saved, 201) : json({ error: saved.error }, 400);

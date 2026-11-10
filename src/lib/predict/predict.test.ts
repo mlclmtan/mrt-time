@@ -3,7 +3,7 @@ import { MINUTE, sgtClock, sgtInstant } from "../time";
 import { BANDS, bandHeadway, inUnstableWindow, predict, projectHistorical, timeBand } from ".";
 import type { Observation } from ".";
 import { scorePrediction, summariseAccuracy } from "./accuracy";
-import { MemoryRateLimiter, autoApprovalStatus, rateLimitKey } from "./readings";
+import { MemoryRateLimiter, PUBLIC_IP_LIMIT, PUBLIC_READING_LIMIT, autoApprovalStatus, hitPublicLimits, rateLimitKey } from "./readings";
 
 // Synthetic fixtures only. 2026-11-02 is a Monday; 2026-11-07 a Saturday.
 const MON = "2026-11-02";
@@ -276,6 +276,19 @@ describe("public reading auto-approval", () => {
     expect((await limiter.hit(key, t0 + 11 * MINUTE)).allowed).toBe(false);
     expect((await limiter.hit(rateLimitKey("device-b", "iphash-1"), t0)).allowed).toBe(true);
     expect((await limiter.hit(key, t0 + 61 * MINUTE)).allowed).toBe(true);
+  });
+  it("rotating device ids can't get past 20 per hour per network (F7)", async () => {
+    const limiters = { device: new MemoryRateLimiter(PUBLIC_READING_LIMIT), ip: new MemoryRateLimiter(PUBLIC_IP_LIMIT) };
+    const t0 = at(MON, "10:00");
+    const results = [];
+    for (let i = 0; i < 25; i++) results.push(await hitPublicLimits(limiters, `rotating-${i}`, "iphash-1", t0 + i * 1000));
+    expect(results.filter((r) => r.allowed)).toHaveLength(20);
+    expect(results.at(-1)).toEqual({ allowed: false, bucket: "ip" });
+    // Another network is unaffected; one device is still held to 10.
+    expect((await hitPublicLimits(limiters, "rotating-0", "iphash-2", t0)).allowed).toBe(true);
+    const own = { device: new MemoryRateLimiter(PUBLIC_READING_LIMIT), ip: new MemoryRateLimiter(PUBLIC_IP_LIMIT) };
+    for (let i = 0; i < 10; i++) await hitPublicLimits(own, "same-device", "iphash-3", t0);
+    expect(await hitPublicLimits(own, "same-device", "iphash-3", t0)).toEqual({ allowed: false, bucket: "device" });
   });
 });
 

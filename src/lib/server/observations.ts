@@ -91,16 +91,32 @@ export async function loadObservations(codes: string[], lines: string[], now: nu
   return [...platform, ...line].filter((o) => (o.id == null || seen.has(o.id) ? false : (seen.add(o.id), true)));
 }
 
-export type WindowSettings = { windows: UnstableWindow[]; /** Edited in admin (then they win over learning). */ custom: boolean };
+export type PredictorEngine = "v1" | "v2";
+export type WindowSettings = {
+  windows: UnstableWindow[];
+  /** Edited in admin (then they win over learning). */
+  custom: boolean;
+  /** Admin kill switch: "v1" = the v1.2 predictor everywhere (app_setting predictor_engine). */
+  engine: PredictorEngine;
+};
+export const ENGINE_SETTING_KEY = "predictor_engine";
 let windowsCache: { at: number; value: WindowSettings } | null = null;
-/** Unstable windows: the admin's list when saved, else the built-in default (which learning may override). */
+/** Unstable windows (the admin's list when saved, else the default) and the predictor engine. */
 export async function getWindowSettings(now = Date.now()): Promise<WindowSettings> {
-  const fallback = { windows: DEFAULT_UNSTABLE_WINDOWS, custom: false };
+  const fallback: WindowSettings = { windows: DEFAULT_UNSTABLE_WINDOWS, custom: false, engine: "v2" };
   if (!dbConfigured()) return fallback;
   if (windowsCache && now - windowsCache.at < 60_000) return windowsCache.value;
   try {
-    const row = await getDb().query.appSetting.findFirst({ where: eq(appSetting.key, "unstable_windows") });
-    const value = Array.isArray(row?.value) ? { windows: row.value as UnstableWindow[], custom: true } : fallback;
+    const rows = await getDb()
+      .select()
+      .from(appSetting)
+      .where(inArray(appSetting.key, ["unstable_windows", ENGINE_SETTING_KEY]));
+    const windows = rows.find((r) => r.key === "unstable_windows")?.value;
+    const engine = (rows.find((r) => r.key === ENGINE_SETTING_KEY)?.value as { engine?: string } | undefined)?.engine;
+    const value: WindowSettings = {
+      ...(Array.isArray(windows) ? { windows: windows as UnstableWindow[], custom: true } : { windows: DEFAULT_UNSTABLE_WINDOWS, custom: false }),
+      engine: engine === "v1" ? "v1" : "v2",
+    };
     windowsCache = { at: now, value };
     return value;
   } catch {

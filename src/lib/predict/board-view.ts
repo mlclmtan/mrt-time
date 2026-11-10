@@ -76,7 +76,7 @@ function extend(times: Timed[], headwayMin: number, now: number): Timed[] {
   const out = times.filter((t) => t.at >= now - GRACE_MS);
   const lastKnown = times[times.length - 1];
   let last = lastKnown?.at ?? now;
-  let pm = lastKnown?.plusMinus ?? null;
+  const pm = lastKnown?.plusMinus ?? null;
   let extra = 0;
   const step = Math.max(1, headwayMin) * MINUTE;
   while (out.length < BOARD_ARRIVALS) {
