@@ -1,37 +1,49 @@
 /**
  * Predictor v2 — next trains for one platform direction at `now`:
- *  1. Same-day anchor — a real train known today at this platform: from a
+ *  1. Same-day trains — real trains known today at this platform: from a
  *     board reading here, someone boarding / getting off here, or the same
- *     train seen at another station on the line (propagated by ride times,
- *     exact ≤ 2 stops away, then ±1 min per 4 stops). Recorded within the
- *     last 90 min. Other trains are filled in by the gap between trains.
+ *     train seen at another station on the line (error model in
+ *     sightings.ts). Recorded within the last 90 min. Trains in between are
+ *     filled in by the gap; a time is exact only within 2 gaps of a known
+ *     train (and ≤ 1 min error), then "≈ ±N" widening 0.5 min a gap; once
+ *     ± passes half the gap, the same-day evidence is too old to place
+ *     trains and the next rules apply (usually a range).
  *  2. Learned band (per platform/direction, day type and 30-min band, from
- *     every known train on earlier days): when clock times repeat day to
- *     day, project them; when they drift, show a range.
- *  3. Not enough days yet: the v0 clock-time repeat outside the editable
- *     unstable windows (admin windows always force ranges), else a range by
- *     the usual gap (learned, else observed on the line, else LTA bands).
+ *     every known train on earlier days): when the previous day's clock
+ *     times keep predicting real trains, project them; else a range.
+ *  3. Not enough scored days yet: the v0 clock-time repeat outside the
+ *     editable unstable windows (admin windows always force ranges), else a
+ *     range by the usual gap (learned, else observed on the line, else LTA).
+ * `engine: "v1"` (admin kill switch) runs the v1.2 predictor instead.
  */
-import { getLine, inService } from "../network";
+import { getLine, inService, type RideOverrides } from "../network";
 import { MINUTE, sgtClock, sgtDate } from "../time";
 import { bandHeadway, inUnstableWindow, readingHeadway } from "./bands";
 import { projectHistorical } from "./historical";
 import { band30Key, learnBand, repeatArrivals, type BandStats } from "./learn";
 import { knownTrainsAt, type KnownTrain, type TrainSighting } from "./sightings";
+import { predictV1 } from "./v1";
 import type { Arrival, Confidence, Observation, Prediction, UnstableWindow } from "./types";
 
 export * from "./types";
 export { BANDS, DEFAULT_UNSTABLE_WINDOWS, bandHeadway, inUnstableWindow, timeBand, readingHeadway } from "./bands";
 export { projectHistorical } from "./historical";
 export type { KnownTrain, TrainSighting, SightingKind } from "./sightings";
+export { predictV1 } from "./v1";
 
 export const SAME_DAY_WINDOW_MIN = 90;
 /** Trains known further ahead than this (seen far up the line) are not used yet. */
 export const SAME_DAY_AHEAD_MIN = 60;
+/** A same-day time stays exact this many gaps from a known train. */
+export const EXACT_GAPS = 2;
+/** Stepping by the gap adds this much error (once within 2 gaps, then per further gap). */
+export const DRIFT_PER_GAP_MIN = 0.5;
 /** A historical anchor further than this from now in time-of-day is ignored. */
 export const HISTORICAL_MAX_GAP_MIN = 120;
 const ARRIVALS_SHOWN = 3;
 const GRACE = 0.25 * MINUTE;
+
+export type PredictEngine = "v1" | "v2";
 
 export type PredictInput = {
   line: string;
@@ -45,22 +57,35 @@ export type PredictInput = {
   unstableWindows?: UnstableWindow[];
   /** True when the windows were edited in admin: they then win over a learned "repeats". */
   windowsCustom?: boolean;
+  /** "v1" = the admin kill switch: the v1.2 predictor (readings here only). Default "v2". */
+  engine?: PredictEngine;
+  /** False while the line has an LTA disruption alert: sightings count only at their own platform. */
+  propagate?: boolean;
+  /** Ride minutes learned from the owner's trips (used for propagation). */
+  rides?: RideOverrides | null;
 };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /* Known trains per platform are reused across calls with the same data (planner, boards). */
 const NO_SIGHTINGS: TrainSighting[] = [];
-const trainCache = new WeakMap<Observation[], WeakMap<TrainSighting[], Map<string, KnownTrain[]>>>();
-export function platformTrains(input: Pick<PredictInput, "line" | "direction" | "station" | "observations" | "sightings">): KnownTrain[] {
+const NO_RIDES: RideOverrides = {};
+const trainCache = new WeakMap<Observation[], WeakMap<TrainSighting[], WeakMap<RideOverrides, Map<string, KnownTrain[]>>>>();
+export function platformTrains(
+  input: Pick<PredictInput, "line" | "direction" | "station" | "observations" | "sightings" | "propagate" | "rides">,
+): KnownTrain[] {
   const sightings = input.sightings ?? NO_SIGHTINGS;
-  let inner = trainCache.get(input.observations);
-  if (!inner) trainCache.set(input.observations, (inner = new WeakMap()));
-  let map = inner.get(sightings);
-  if (!map) inner.set(sightings, (map = new Map()));
-  const k = `${input.station}|${input.line}|${input.direction}`;
+  const rides = input.rides ?? NO_RIDES;
+  let bySightings = trainCache.get(input.observations);
+  if (!bySightings) trainCache.set(input.observations, (bySightings = new WeakMap()));
+  let byRides = bySightings.get(sightings);
+  if (!byRides) bySightings.set(sightings, (byRides = new WeakMap()));
+  let map = byRides.get(rides);
+  if (!map) byRides.set(rides, (map = new Map()));
+  const propagate = input.propagate !== false;
+  const k = `${input.station}|${input.line}|${input.direction}|${propagate}`;
   let trains = map.get(k);
-  if (!trains) map.set(k, (trains = knownTrainsAt(input, sightings, input.observations)));
+  if (!trains) map.set(k, (trains = knownTrainsAt(input, sightings, input.observations, { propagate, rides })));
   return trains;
 }
 
@@ -100,6 +125,34 @@ export function fillTimes(known: number[], headwayMin: number, now: number, coun
   return out.sort((a, b) => a - b);
 }
 
+export type ProjectedTrain = { at: number; errMin: number; gaps: number; exact: boolean };
+
+/**
+ * Today's known trains plus the ones in between / after, each with its
+ * error: a known train keeps its own; a train stepped from one by the gap
+ * gets its error + 0.5 min (1–2 gaps away), + 0.5 more per further gap.
+ * Exact only within 2 gaps and ≤ 1 min error — so one tap at Now (±0.5)
+ * gives two exact trains after it, a board's next train (±1) only itself.
+ */
+export function projectKnown(known: Pick<KnownTrain, "at" | "errMin">[], headwayMin: number, now: number, count = ARRIVALS_SHOWN): ProjectedTrain[] {
+  const step = Math.max(1, headwayMin) * MINUTE;
+  return fillTimes(
+    known.map((k) => k.at),
+    headwayMin,
+    now,
+    count,
+  ).map((at) => {
+    let best = { errMin: Infinity, gaps: 0 };
+    for (const k of known) {
+      const gaps = Math.round(Math.abs(at - k.at) / step);
+      const errMin = k.errMin + (gaps === 0 ? 0 : DRIFT_PER_GAP_MIN * (1 + Math.max(0, gaps - EXACT_GAPS)));
+      if (errMin < best.errMin || (errMin === best.errMin && gaps < best.gaps)) best = { errMin, gaps };
+    }
+    const errMin = Math.round(best.errMin * 100) / 100;
+    return { at, errMin, gaps: best.gaps, exact: best.gaps <= EXACT_GAPS && errMin <= 1 };
+  });
+}
+
 /** Usual gap from today's board readings among the anchoring trains. */
 function sameDayGap(trains: KnownTrain[]): number | null {
   const groups = new Map<string, number[]>();
@@ -115,6 +168,7 @@ function sameDayGap(trains: KnownTrain[]): number | null {
 }
 
 export function predict(input: PredictInput): Prediction {
+  if (input.engine === "v1") return predictV1(input);
   const { line, direction, station, now } = input;
   const windows = input.unstableWindows;
   const lineInfo = getLine(line);
@@ -139,7 +193,7 @@ export function predict(input: PredictInput): Prediction {
       ...common,
     };
 
-  // 1. Same-day anchor: real trains known today (here or further along the line).
+  // 1. Same-day: real trains known today (here or further along the line).
   const today = sgtDate(now);
   const recent = trains.filter(
     (t) =>
@@ -150,35 +204,40 @@ export function predict(input: PredictInput): Prediction {
       now - t.at <= SAME_DAY_WINDOW_MIN * MINUTE,
   );
   if (recent.length) {
-    const anchor = [...recent].sort((a, b) => a.spreadMin - b.spreadMin || a.hops - b.hops || b.seenAt - a.seenAt)[0];
     const headway = sameDayGap(recent) ?? usualGap;
-    const times = fillTimes(
-      recent.map((t) => t.at),
-      headway,
-      now,
-    );
-    const minutes = Math.max(0, Math.round((now - anchor.seenAt) / MINUTE));
-    const reason: Prediction["reason"] =
-      anchor.hops > 0
-        ? { code: "seen_elsewhere", params: { station: anchor.origin, minutes, hops: anchor.hops } }
-        : anchor.kind === "board_reading"
-          ? { code: "reading_ago", params: { minutes } }
-          : { code: "boarded_ago", params: { minutes } };
-    const spread = Math.max(0, ...recent.filter((t) => t.at >= now - GRACE).slice(0, ARRIVALS_SHOWN).map((t) => t.spreadMin), anchor.spreadMin);
-    return {
-      kind: "times",
-      arrivals: arrivalsFrom(times, now),
-      headwayMin: round1(headway),
-      waitMin: { min: 0, max: round1(headway) },
-      confidence: spread === 0 ? "high" : "medium",
-      basis: "same_day",
-      reason,
-      ...common,
-      anchorAt: anchor.seenAt,
-      spreadMin: spread,
-      anchorKind: anchor.kind,
-      ...(anchor.hops > 0 ? { anchorStation: anchor.origin } : {}),
-    };
+    const upcoming = projectKnown(recent, headway, now, ARRIVALS_SHOWN + 3).filter((t) => t.at >= now - GRACE);
+    // Only while the next train can still be told apart from the one after it.
+    const shown: ProjectedTrain[] = [];
+    for (const t of upcoming) {
+      if (shown.length >= ARRIVALS_SHOWN || t.errMin > headway / 2) break;
+      shown.push(t);
+    }
+    if (shown.length) {
+      const anchor = [...recent].sort((a, b) => a.errMin - b.errMin || a.hops - b.hops || b.seenAt - a.seenAt)[0];
+      const minutes = Math.max(0, Math.round((now - anchor.seenAt) / MINUTE));
+      const reason: Prediction["reason"] =
+        anchor.hops > 0
+          ? { code: "seen_elsewhere", params: { station: anchor.origin, minutes, hops: anchor.hops } }
+          : anchor.kind === "board_reading"
+            ? { code: "reading_ago", params: { minutes } }
+            : { code: "boarded_ago", params: { minutes } };
+      const spread = Math.max(0, ...shown.map((t) => (t.exact ? 0 : Math.max(1, Math.ceil(t.errMin)))));
+      return {
+        kind: "times",
+        arrivals: shown.map((t) => ({ at: t.at, inMin: round1(Math.max(0, (t.at - now) / MINUTE)), errMin: t.exact ? 0 : round1(t.errMin) })),
+        headwayMin: round1(headway),
+        waitMin: { min: 0, max: round1(headway) },
+        // The next train decides: exact → high (later ones may read "≈").
+        confidence: shown[0].exact ? "high" : "medium",
+        basis: "same_day",
+        reason,
+        ...common,
+        anchorAt: anchor.seenAt,
+        spreadMin: spread,
+        anchorKind: anchor.kind,
+        ...(anchor.hops > 0 ? { anchorStation: anchor.origin } : {}),
+      };
+    }
   }
 
   const range = (confidence: Confidence, code: "unstable_window" | "observed_gap" | "typical_gap"): Prediction => ({
@@ -201,13 +260,13 @@ export function predict(input: PredictInput): Prediction {
         arrivals: arrivalsFrom(repeat, now),
         headwayMin: round1(learned.headway!),
         waitMin: { min: 0, max: round1(learned.headway!) },
-        confidence: learned.days >= 5 ? "high" : "medium",
+        confidence: "medium",
         basis: "historical",
         reason: { code: "repeats", params: { days: learned.days } },
         ...common,
       };
 
-    // 3. Not enough days to tell: v0 clock-time repeat from another day's reading.
+    // 3. Not enough scored days to tell: v0 clock-time repeat from another day's reading.
     if (learned.stability === "unknown") {
       const platform = input.observations.filter(
         (o) => o.status === "approved" && o.line === line && o.direction === direction && o.station === station && o.minutes.length > 0 && sgtDate(o.capturedAt) !== today,

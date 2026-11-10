@@ -32,7 +32,8 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
   const { t, locale } = useI18n();
   if (view.state === "closed") return <p className="mt-2 text-muted">{t("board.notRunning")}</p>;
   const est = view.state === "estimate";
-  const approx = est ? "≈" : "";
+  // Each train has its own ±: exact near a known train, "≈ ±N" further away.
+  const approx = (a: { plusMinus: number | null }) => (a.plusMinus != null ? "≈" : "");
   const inText = (at: number) => {
     const n = Math.max(0, Math.floor((at - now) / 60_000));
     return n === 0 ? t("board.due") : t("board.in", { n });
@@ -45,9 +46,9 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
           <div>
             <div className="text-[11px] tracking-wide text-muted uppercase">{t("board.next")}</div>
             <div className={`led tabular text-4xl leading-none font-bold ${est ? "opacity-80" : ""}`}>
-              {approx}
+              {approx(first)}
               {first.clock}
-              {est && view.plusMinus != null && <span className="ml-1 text-base font-normal text-muted">±{view.plusMinus}</span>}
+              {first.plusMinus != null && <span className="ml-1 text-base font-normal text-muted">±{first.plusMinus}</span>}
             </div>
             <div className="tabular mt-1 text-sm">{inText(first.at)}</div>
           </div>
@@ -55,9 +56,10 @@ export function DirectionTimes({ view, now }: { view: DirectionView; now: number
         {rest.map((a) => (
           <div key={a.at}>
             <div className="text-[11px] tracking-wide text-muted uppercase">{t("board.then")}</div>
-            <div className={`led tabular text-2xl leading-none ${est ? "opacity-70" : "opacity-90"}`}>
-              {approx}
+            <div className={`led tabular text-2xl leading-none ${a.plusMinus != null ? "opacity-70" : "opacity-90"}`}>
+              {approx(a)}
               {a.clock}
+              {a.plusMinus != null && a.plusMinus !== first?.plusMinus && <span className="ml-1 text-xs font-normal text-muted">±{a.plusMinus}</span>}
             </div>
             <div className="tabular mt-1 text-xs text-muted">{inText(a.at)}</div>
           </div>

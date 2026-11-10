@@ -27,14 +27,23 @@ export function scorePrediction(prediction: Pick<Prediction, "kind" | "arrivals"
 
 /** How long before a boarding the replayed prediction is taken (you check the board, then board). */
 export const BACKTEST_LEAD_MIN = 2;
+/** A boarding logged more than this after it happened (time moved back) is not scored. */
+export const MAX_SCORED_BACKDATE_MIN = 2;
+
+/** Scored only when logged as it happened (≤ 2 min late) and never edited afterwards. */
+export function scorableBoarding(s: Pick<TrainSighting, "at" | "recordedAt" | "editedAt">): boolean {
+  if (s.editedAt != null) return false;
+  return s.recordedAt == null || s.recordedAt - s.at <= MAX_SCORED_BACKDATE_MIN * MINUTE;
+}
 
 export type BacktestRow = { line: string; station: string; band: string; hit: boolean | null; errorMin: number | null; basis: string };
 
 /**
- * Sightings as ground truth: for every approved "boarded" sighting, replay
- * the prediction we would have made a couple of minutes before, using only
- * what was known then (and never the boarding itself), and score the
- * nearest predicted train against the real one.
+ * Sightings as ground truth: for every approved "boarded" sighting logged as
+ * it happened (not back-dated > 2 min, not edited), replay the prediction we
+ * would have made a couple of minutes before, using only what had been
+ * recorded by then (and never the boarding itself), and score the nearest
+ * predicted train against the real one.
  */
 export function backtestSightings(
   sightings: TrainSighting[],
@@ -42,12 +51,13 @@ export function backtestSightings(
   opts: { unstableWindows?: UnstableWindow[]; windowsCustom?: boolean; limit?: number } = {},
 ): BacktestRow[] {
   const targets = sightings
-    .filter((s) => s.status === "approved" && s.kind === "boarded")
+    .filter((s) => s.status === "approved" && s.kind === "boarded" && scorableBoarding(s))
     .sort((a, b) => b.at - a.at)
     .slice(0, opts.limit ?? 400);
   return targets.map((target) => {
     const now = target.at - BACKTEST_LEAD_MIN * MINUTE;
-    const known = sightings.filter((s) => s !== target && (s.seenAt ?? s.at) <= now);
+    // Known by then = recorded by then (a back-dated tap was unknown until it was logged).
+    const known = sightings.filter((s) => s !== target && (s.recordedAt ?? s.seenAt ?? s.at) <= now && s.at <= now);
     const readings = observations.filter((o) => o.capturedAt <= now);
     const p = predict({
       line: target.line,

@@ -50,13 +50,19 @@ export function autoApprovalStatus(
 
 /**
  * A public "I boarded" / "Got off" is approved when a train already known at
- * that platform (from approved readings or sightings, here or propagated
- * from other stations, recorded within 30 min) is within ±2 min of it.
+ * that platform — vouched for by the owner / Hermes (or two public networks
+ * that agree), here or propagated, recorded within 30 min — is within ±2 min
+ * of it (plus that train's error beyond 1 min). Other public taps never
+ * approve each other on their own.
  */
-export function sightingApprovalStatus(candidateAt: number, known: { at: number; seenAt: number; spreadMin: number }[]): ReadingStatus {
+export function sightingApprovalStatus(candidateAt: number, known: { at: number; seenAt: number; errMin: number; source?: string; corroborated?: boolean }[]): ReadingStatus {
   const tol = CONSISTENCY_TOLERANCE_MIN * MINUTE;
+  // Only trains the owner / Hermes / an agreed public pair vouch for can approve a public tap.
   const consistent = known.some(
-    (t) => Math.abs(t.seenAt - candidateAt) <= CONSISTENCY_WINDOW_MIN * MINUTE && Math.abs(t.at - candidateAt) <= tol + t.spreadMin * MINUTE,
+    (t) =>
+      (t.source !== "public" || t.corroborated) &&
+      Math.abs(t.seenAt - candidateAt) <= CONSISTENCY_WINDOW_MIN * MINUTE &&
+      Math.abs(t.at - candidateAt) <= tol + Math.max(0, t.errMin - 1) * MINUTE,
   );
   return consistent ? "approved" : "pending";
 }

@@ -68,27 +68,35 @@ export function directionsAt(code: string): Direction[] {
 
 const key = (a: string, b: string) => `${a}>${b}`;
 
-/** Minutes between two adjacent platforms; built once from RIDE_MINUTES. */
-const HOP = (() => {
+/**
+ * Ride minutes learned from the owner's own trips ("A>B" → median minutes,
+ * ≥ 3 board → got-off pairs). They win over the hand-entered figures and
+ * the 2-min default. See learnRideTimes in predict/rides.ts.
+ */
+export type RideOverrides = Readonly<Record<string, number>>;
+
+function pathBetween(a: string, b: string) {
+  for (const line of Object.values(LINES))
+    for (const d of Object.values(line.directions))
+      for (const p of d.paths) {
+        const i = p.indexOf(a);
+        const j = p.indexOf(b);
+        if (i >= 0 && j > i) return p.slice(i, j + 1);
+      }
+  return null;
+}
+
+/** Minutes between adjacent platforms from ride figures; longer rides spread over their unknown hops. */
+function buildHops(rides: Readonly<Record<string, number>>): Map<string, number> {
   const hops = new Map<string, number>();
-  const pathFor = (a: string, b: string) => {
-    for (const line of Object.values(LINES))
-      for (const d of Object.values(line.directions))
-        for (const p of d.paths) {
-          const i = p.indexOf(a);
-          const j = p.indexOf(b);
-          if (i >= 0 && j > i) return p.slice(i, j + 1);
-        }
-    return null;
-  };
   const set = (a: string, b: string, v: number) => {
     hops.set(key(a, b), v);
     if (!hops.has(key(b, a))) hops.set(key(b, a), v);
   };
-  const observed = Object.entries(RIDE_MINUTES)
+  const observed = Object.entries(rides)
     .map(([k, v]) => {
       const [a, b] = k.split(">");
-      return { a, b, v, path: pathFor(a, b) };
+      return { a, b, v, path: pathBetween(a, b) };
     })
     .filter((o): o is { a: string; b: string; v: number; path: string[] } => o.path != null)
     .sort((x, y) => x.path.length - y.path.length);
@@ -106,43 +114,79 @@ const HOP = (() => {
     for (const [a, b] of unknown) set(a, b, each);
   }
   return hops;
-})();
+}
+const BASE_HOPS = buildHops(RIDE_MINUTES);
+const LEARNED_HOPS = new WeakMap<RideOverrides, Map<string, number>>();
+function hopsFor(learned?: RideOverrides | null): Map<string, number> {
+  if (!learned || !Object.keys(learned).length) return BASE_HOPS;
+  let hops = LEARNED_HOPS.get(learned);
+  // Learned figures first (they win), then the hand-entered ones fill the rest.
+  if (!hops) LEARNED_HOPS.set(learned, (hops = buildHops({ ...learned, ...Object.fromEntries(Object.entries(RIDE_MINUTES).filter(([k]) => !(k in learned))) })));
+  return hops;
+}
 
-export function hopMinutes(a: string, b: string): number {
-  const v = HOP.get(key(a, b));
+export function hopMinutes(a: string, b: string, learned?: RideOverrides | null): number {
+  const v = hopsFor(learned).get(key(a, b));
   if (v != null) return v;
   const p = PLATFORMS[a];
   return p ? LINES[p.line].minutesPerStop : 2;
 }
 
+/** A ride between two platforms was measured (observed or learned), not a per-stop default. */
+export function rideMeasured(a: string, b: string, learned?: RideOverrides | null): boolean {
+  return key(a, b) in RIDE_MINUTES || key(b, a) in RIDE_MINUTES || Boolean(learned && (key(a, b) in learned || key(b, a) in learned));
+}
+
 type IndexedPath = { codes: string[]; pos: Map<string, number>; cum: number[] };
-const PATHS = new Map<string, IndexedPath[]>();
-function indexedPaths(line: string, direction: string): IndexedPath[] {
+const PATHS = new WeakMap<Map<string, number>, Map<string, IndexedPath[]>>();
+function indexedPaths(line: string, direction: string, learned?: RideOverrides | null): IndexedPath[] {
+  const hops = hopsFor(learned);
+  let byDir = PATHS.get(hops);
+  if (!byDir) PATHS.set(hops, (byDir = new Map()));
   const k = `${line}:${direction}`;
-  const cached = PATHS.get(k);
+  const cached = byDir.get(k);
   if (cached) return cached;
   const d = getDirection(line, direction);
   const out = (d?.paths ?? []).map((codes) => {
     const cum = [0];
-    for (let i = 1; i < codes.length; i++) cum.push(cum[i - 1] + hopMinutes(codes[i - 1], codes[i]));
+    for (let i = 1; i < codes.length; i++) cum.push(cum[i - 1] + hopMinutes(codes[i - 1], codes[i], learned));
     return { codes, pos: new Map(codes.map((c, i) => [c, i])), cum };
   });
-  PATHS.set(k, out);
+  byDir.set(k, out);
   return out;
 }
 
-export type TrainOffset = { minutes: number; hops: number };
+export type TrainOffset = {
+  minutes: number;
+  hops: number;
+  /** The stops from the earlier to the later platform, in running order (for per-hop error). */
+  between: string[];
+};
+
+/** A path of this direction starts here: trains wait (dwell) at a terminal, so a boarding there doesn't time the train. */
+export function isOriginTerminal(line: string, direction: string, code: string): boolean {
+  const paths = getDirection(line, direction)?.paths.filter((p) => p.includes(code)) ?? [];
+  return paths.length > 0 && paths.every((p) => p[0] === code);
+}
 
 /**
  * Where the same train is at `to` relative to `from` (direction `direction`):
  * positive minutes downstream (later), negative upstream (earlier). Upstream
  * of a junction where branches merge is ambiguous, so it is only given when
  * every path through `from` agrees. `stopAt` cuts the trip short at an early
- * terminal (e.g. Springleaf) when the board said so.
+ * terminal (e.g. Springleaf, or a possible short-turn) for stops beyond it.
+ * `learned` ride minutes (owner's trips) win over the defaults.
  */
-export function trainOffset(line: string, direction: string, from: string, to: string, stopAt?: string | null): TrainOffset | null {
-  if (from === to) return { minutes: 0, hops: 0 };
-  const paths = indexedPaths(line, direction).filter((p) => p.pos.has(from));
+export function trainOffset(
+  line: string,
+  direction: string,
+  from: string,
+  to: string,
+  stopAt?: string | null,
+  learned?: RideOverrides | null,
+): TrainOffset | null {
+  if (from === to) return { minutes: 0, hops: 0, between: [from] };
+  const paths = indexedPaths(line, direction, learned).filter((p) => p.pos.has(from));
   if (!paths.length) return null;
   // Every path through `from` must agree (branches that merge or split make it ambiguous).
   const offsets = paths.map((p) => {
@@ -153,7 +197,7 @@ export function trainOffset(line: string, direction: string, from: string, to: s
       const s = p.pos.get(stopAt);
       if (s != null && s > i && j > s) return null;
     }
-    return { minutes: p.cum[j] - p.cum[i], hops: j - i };
+    return { minutes: p.cum[j] - p.cum[i], hops: j - i, between: p.codes.slice(Math.min(i, j), Math.max(i, j) + 1) };
   });
   const first = offsets[0];
   if (!first || offsets.some((o) => o == null || Math.sign(o.hops) !== Math.sign(first.hops) || Math.abs(o.minutes - first.minutes) > 0.5)) return null;
@@ -181,7 +225,7 @@ export function rideMinutes(fromCode: string, toCode: string): number {
   const dir = directionBetween(fromCode, toCode);
   if (!dir) return NaN;
   // The shortest path that rides from → to (a split line may offer two).
-  const options = indexedPaths(PLATFORMS[fromCode].line, dir.key)
+  const options = indexedPaths(PLATFORMS[fromCode].line, dir.key, null)
     .map((p) => {
       const i = p.pos.get(fromCode);
       const j = p.pos.get(toCode);

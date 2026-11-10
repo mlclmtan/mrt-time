@@ -67,19 +67,20 @@ describe("station board view-model", () => {
     if (v1.arrivals[0].inMin >= 2) expect(v2.arrivals[0].at).toBe(v1.arrivals[0].at);
   });
 
-  it("is exact (solid, no ≈) from a reading today within 90 min", () => {
-    const now = at(TUE, "10:24");
-    const obs: Observation = { station: "EW17", line: "EWL", direction: "TO_EAST", capturedAt: at(TUE, "10:20"), minutes: [2, 7], source: "owner", status: "approved" };
+  it("a reading's next train is exact (±1); its later trains read ≈ ±2 (board countdowns ±1.5)", () => {
+    const now = at(TUE, "10:23");
+    const obs: Observation = { station: "EW17", line: "EWL", direction: "TO_EAST", capturedAt: at(TUE, "10:20"), minutes: [4, 9], source: "owner", status: "approved" };
     const view = directionView(predict({ station: "EW17", line: "EWL", direction: "TO_EAST", now, observations: [obs] }), now, "EWL");
     expect(view.state).toBe("exact");
     if (view.state !== "exact") return;
-    expect(view.arrivals.map((a) => a.clock)).toEqual(["10:27", "10:32", "10:37"]);
+    expect(view.arrivals.map((a) => a.clock)).toEqual(["10:24", "10:29", "10:34"]);
+    expect(view.arrivals.map((a) => a.plusMinus)).toEqual([null, 2, 2]);
     expect(view.plusMinus).toBeNull();
     const html = renderToStaticMarkup(createElement(DirectionTimes, { view, now }));
-    expect(html).not.toContain("≈");
-    expect(html).toContain("10:27");
-    expect(html).toContain("in 3 min");
-    expect(html).toContain("From a board reading 4 min ago");
+    expect(html).toContain(">10:24<");
+    expect(html).toContain("≈10:29");
+    expect(html).toContain("in 1 min");
+    expect(html).toContain("From a board reading 3 min ago");
   });
 
   it("shows closed outside service hours", () => {

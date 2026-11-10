@@ -26,7 +26,9 @@ describe("same-day anchor", () => {
     const p = predict({ ...base, now: at(MON, "10:24"), observations: [reading(MON, "10:21", [1, 5, 10])] });
     expect(p.kind).toBe("times");
     expect(p.basis).toBe("same_day");
-    expect(p.confidence).toBe("high");
+    // The board's 2nd and 3rd trains are ±1.5 (v2.1 error model): "≈", medium.
+    expect(p.confidence).toBe("medium");
+    expect(p.arrivals.slice(0, 2).map((a) => a.errMin)).toEqual([1.5, 1.5]);
     near(p.arrivals[0].at, at(MON, "10:26"));
     near(p.arrivals[1].at, at(MON, "10:31"));
     expect(p.arrivals[0].inMin).toBeCloseTo(2, 1);
@@ -35,9 +37,11 @@ describe("same-day anchor", () => {
 
   it("steps beyond the shown trains by the reading's headway", () => {
     const p = predict({ ...base, now: at(MON, "11:00"), observations: [reading(MON, "10:40", [2, 7])] });
-    // 10:42, 10:47 shown; headway 5 → 10:52, 10:57, 11:02 …
+    // 10:42, 10:47 shown; headway 5 → 10:52, 10:57, 11:02 … Four gaps on, 11:02 is ≈ ±2.5
+    // (= half the gap); 11:07 would be ±3, too vague to tell trains apart, so it isn't listed.
     near(p.arrivals[0].at, at(MON, "11:02"));
-    near(p.arrivals[1].at, at(MON, "11:07"));
+    expect(p.arrivals.map((a) => a.errMin)).toEqual([2.5]);
+    expect(p.confidence).toBe("medium");
   });
 
   it("ignores readings older than 90 minutes, pending readings and the other direction / line", () => {
@@ -294,5 +298,38 @@ describe("accuracy", () => {
       { key: "EWL", scored: 2, hits: 1, rate: 0.5 },
       { key: "TEL", scored: 1, hits: 1, rate: 1 },
     ]);
+  });
+});
+
+describe("v1 compatibility and the kill switch (F11, F12)", () => {
+  const strip = (p: ReturnType<typeof predict>) => ({ kind: p.kind, basis: p.basis, at: p.arrivals.map((a) => a.at), headway: p.headwayMin, reason: p.reason.code });
+  it("with no sightings and no same-day reading, v2 predicts exactly what v1 did", () => {
+    const history = [reading("2026-10-27", "13:10", [2, 8]), reading("2026-10-28", "13:40", [1, 7]), reading("2026-10-29", "09:40", [3, 9])];
+    const scenarios = [
+      { now: at(MON, "13:15"), observations: history }, // another day's clock time (outside unstable windows)
+      { now: at(MON, "09:40"), observations: history }, // weekday 09:15–10:30 window: a range
+      { now: at(MON, "15:00"), observations: [] }, // nothing known: typical gap
+      { now: at("2026-11-07", "11:00"), observations: history }, // Saturday
+      { now: at(MON, "02:00"), observations: history }, // not running
+    ];
+    for (const s of scenarios) {
+      const v2 = predict({ ...base, ...s, sightings: [] });
+      const v1 = predict({ ...base, ...s, engine: "v1" });
+      expect(strip(v2), sgtClock(s.now)).toEqual(strip(v1));
+    }
+  });
+
+  it("a fresh reading's next train is the same in v1 and v2", () => {
+    const observations = [reading(MON, "10:21", [3, 8])];
+    const now = at(MON, "10:22");
+    expect(predict({ ...base, now, observations }).arrivals[0].at).toBe(predict({ ...base, now, observations, engine: "v1" }).arrivals[0].at);
+  });
+
+  it("engine v1 ignores sightings and propagation entirely", () => {
+    const sightings = [{ station: "EW17", line: "EWL", direction: "TO_EAST", at: at(MON, "11:00"), kind: "boarded" as const, source: "owner" as const, status: "approved" as const }];
+    const v2 = predict({ ...base, now: at(MON, "11:01"), observations: [], sightings });
+    const v1 = predict({ ...base, now: at(MON, "11:01"), observations: [], sightings, engine: "v1" });
+    expect(v2.basis).toBe("same_day");
+    expect(v1.basis).toBe("band");
   });
 });

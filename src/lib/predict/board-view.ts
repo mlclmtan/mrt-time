@@ -1,7 +1,9 @@
 /**
  * Station-board view-model: what one direction card shows. Always clock
  * times (never an interval on its own):
- *  - "exact": a board reading at this platform today within 90 min.
+ *  - "exact": a train known today (board reading, boarding, or the same
+ *    train seen nearby) within 2 gaps and ≤ 1 min error; further away the
+ *    same-day times read "≈HH:MM ±N", widening per gap (each arrival has its ±).
  *  - "estimate": another day's reading at a similar time, or the typical
  *    gap at this hour placed on a steady grid, shown as "≈HH:MM" with a
  *    ± band. Unstable windows widen the band instead of hiding times.
@@ -16,7 +18,13 @@ export const BOARD_ARRIVALS = 3;
 /** Trains are kept on the card until 30 s after they are due. */
 const GRACE_MS = 30_000;
 
-export type BoardArrival = { at: number; clock: string; inMin: number };
+export type BoardArrival = {
+  at: number;
+  clock: string;
+  inMin: number;
+  /** ± minutes on this train (null = exact). Same-day trains far from a known one widen. */
+  plusMinus: number | null;
+};
 export type BoardReason =
   | { code: "reading_ago"; minutes: number }
   | { code: "boarded_ago"; minutes: number }
@@ -61,27 +69,36 @@ export function gridArrivals(headwayMin: number, now: number, line: string | und
   return Array.from({ length: count }, (_, i) => origin + (k + i) * h);
 }
 
-function extend(times: number[], headwayMin: number, now: number): number[] {
-  const out = times.filter((t) => t >= now - GRACE_MS);
-  let last = times[times.length - 1] ?? now;
+type Timed = { at: number; plusMinus: number | null };
+
+/** Keep the next trains; fill up to three by the gap — never exact, ± widening 0.5 min a gap. */
+function extend(times: Timed[], headwayMin: number, now: number): Timed[] {
+  const out = times.filter((t) => t.at >= now - GRACE_MS);
+  const lastKnown = times[times.length - 1];
+  let last = lastKnown?.at ?? now;
+  let pm = lastKnown?.plusMinus ?? null;
+  let extra = 0;
   const step = Math.max(1, headwayMin) * MINUTE;
   while (out.length < BOARD_ARRIVALS) {
     last += step;
-    if (last >= now - GRACE_MS) out.push(last);
+    extra += 0.5;
+    if (last >= now - GRACE_MS) out.push({ at: last, plusMinus: Math.max(1, Math.ceil((pm ?? 0) + extra)) });
   }
   return out.slice(0, BOARD_ARRIVALS);
 }
 
-const toArrival = (now: number) => (at: number): BoardArrival => ({ at, clock: sgtClock(at), inMin: Math.max(0, Math.floor((at - now) / MINUTE)) });
+const toArrival = (now: number) => (t: Timed): BoardArrival => ({ at: t.at, clock: sgtClock(t.at), inMin: Math.max(0, Math.floor((t.at - now) / MINUTE)), plusMinus: t.plusMinus });
+const withSpread = (pm: number | null) => (at: number): Timed => ({ at, plusMinus: pm });
 
 export function directionView(p: Prediction, now: number, line?: string): DirectionView {
   if (p.kind === "closed") return { state: "closed" };
   const headwayMin = p.headwayMin || 6;
   const base = { headwayMin, unstable: p.unstable };
   if (p.basis === "same_day") {
-    const times = extend(p.arrivals.map((a) => a.at), headwayMin, now);
+    // Exact near a known train; "≈ ±N" further away (errMin from the predictor).
+    const known: Timed[] = p.arrivals.map((a) => ({ at: a.at, plusMinus: a.errMin ? Math.max(1, Math.ceil(a.errMin)) : null }));
+    const times = extend(known, headwayMin, now);
     const minutes = p.anchorAt != null ? Math.max(0, Math.round((now - p.anchorAt) / MINUTE)) : Number(p.reason.params.minutes ?? 0);
-    const spread = p.spreadMin ?? 0;
     const reason: BoardReason =
       p.reason.code === "seen_elsewhere"
         ? { code: "seen_elsewhere", minutes, station: String(p.reason.params.station ?? "") }
@@ -90,18 +107,19 @@ export function directionView(p: Prediction, now: number, line?: string): Direct
           : { code: "reading_ago", minutes };
     return {
       ...base,
-      state: spread > 0 ? "estimate" : "exact",
-      plusMinus: spread > 0 ? spread : null,
+      state: times[0]?.plusMinus == null ? "exact" : "estimate",
+      plusMinus: times[0]?.plusMinus ?? null,
       arrivals: times.map(toArrival(now)),
       reason,
     };
   }
   if (p.basis === "historical" && p.arrivals.length) {
-    const times = extend(p.arrivals.map((a) => a.at), headwayMin, now);
+    const pm = estimateSpread(p);
+    const times = extend(p.arrivals.map((a) => a.at).map(withSpread(pm)), headwayMin, now).map((t) => ({ ...t, plusMinus: pm }));
     return {
       ...base,
       state: "estimate",
-      plusMinus: estimateSpread(p),
+      plusMinus: pm,
       arrivals: times.map(toArrival(now)),
       reason:
         p.reason.code === "repeats"
@@ -109,11 +127,12 @@ export function directionView(p: Prediction, now: number, line?: string): Direct
           : { code: "historical_anchor", clock: String(p.reason.params.clock ?? "") },
     };
   }
-  const times = gridArrivals(headwayMin, now, line);
+  const pm = estimateSpread({ ...p, basis: "band" });
+  const times = gridArrivals(headwayMin, now, line).map(withSpread(pm));
   return {
     ...base,
     state: "estimate",
-    plusMinus: estimateSpread({ ...p, basis: "band" }),
+    plusMinus: pm,
     arrivals: times.map(toArrival(now)),
     reason: { code: p.unstable ? "unstable_gap" : "typical_gap", headway: wholeMin(headwayMin) },
   };

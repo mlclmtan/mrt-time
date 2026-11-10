@@ -29,7 +29,16 @@ export type ReasonCode =
   | "unstable_window" // { headway }
   | "not_running";
 
-export type Arrival = { at: number; inMin: number };
+export type Arrival = {
+  at: number;
+  inMin: number;
+  /**
+   * Same-day trains only: ± minutes on this arrival. 0 = exact (a known
+   * train, or within 2 gaps of one, with ≤ 1 min error); otherwise shown as
+   * "≈HH:MM ±N" — the band widens with every gap further from what was seen.
+   */
+  errMin?: number;
+};
 
 export type Prediction = {
   /** "times" = clock arrivals; "range" = every ~N min, wait between bounds. */
@@ -44,7 +53,7 @@ export type Prediction = {
   band: TimeBandKey;
   unstable: boolean;
   anchorAt?: number;
-  /** ± minutes on same-day times that came from a train seen further along the line. */
+  /** Largest whole-minute ± among the shown same-day arrivals (0 = all exact). */
   spreadMin?: number;
   /** What the same-day times are based on. */
   anchorKind?: "board_reading" | "boarded" | "alighted";
