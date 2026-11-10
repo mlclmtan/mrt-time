@@ -75,7 +75,7 @@ await page("/terms");
 await page("/media-kit");
 await page("/zh-Hant");
 await page("/sign-in");
-await page("/add", "Add a board reading");
+await page("/add", "Log a train");
 await page("/stations", "Changi Airport");
 await page("/station/changi-airport", "Changi Airport");
 await page("/station/marina-bay", "Marina Bay");
