@@ -42,6 +42,7 @@ const baseEn = {
   "board.window": "Next train {from}–{to}",
   "board.notRunning": "Not running now",
   "board.updated": "Updated {time}",
+  "board.refresh": "Refresh",
   "board.offline": "Offline — showing snapshot from {time}",
   "board.loading": "Loading board…",
   "board.towards": "Towards",
@@ -314,6 +315,7 @@ const baseEn = {
   "newsletter.cta": "Subscribe",
   "newsletter.done": "Subscribed — thank you!",
   "newsletter.check": "Check your inbox to confirm.",
+  "newsletter.telegram": "Or follow MRT Time on Telegram",
 
   "kol.with": "with {name}",
   "kol.welcome": "{name} uses MRT Time to never miss a train.",
@@ -461,6 +463,7 @@ const baseZh: Record<keyof typeof baseEn, string> = {
   "board.window": "下一班約 {from}–{to}",
   "board.notRunning": "現時沒有列車服務",
   "board.updated": "更新於 {time}",
+  "board.refresh": "重新整理",
   "board.offline": "離線 — 顯示 {time} 的快照",
   "board.loading": "載入中…",
   "board.towards": "開往",
@@ -733,6 +736,7 @@ const baseZh: Record<keyof typeof baseEn, string> = {
   "newsletter.cta": "訂閱",
   "newsletter.done": "已訂閱，謝謝！",
   "newsletter.check": "請到收件匣確認訂閱。",
+  "newsletter.telegram": "或在 Telegram 關注 MRT Time",
 
   "kol.with": "與 {name} 合作",
   "kol.welcome": "{name} 用 MRT Time，從不錯過列車。",

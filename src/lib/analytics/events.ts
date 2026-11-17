@@ -123,7 +123,13 @@ export const EVENT_SCHEMAS = {
     method: z.enum(["web_share", "copy"]),
     content_type: z.enum(["station", "journey", "app", "media_kit"]),
   }),
-  outbound_click: z.strictObject({ domain: hostname, link_type: z.enum(["bus", "lta", "other"]) }),
+  outbound_click: z.strictObject({ domain: hostname, link_type: z.enum(["bus", "lta", "telegram", "other"]) }),
+  /**
+   * Fresh times asked for: the station board's Refresh button (`manual`), the
+   * board re-fetching when the app comes back after ≥ 1 min away (`resume`),
+   * or the update banner's reload (`app` / `update`).
+   */
+  refresh: z.strictObject({ surface: z.enum(["board", "app"]), trigger: z.enum(["manual", "resume", "update"]) }),
   alert_view: z.strictObject({ line: lineCode, status: z.number().int().min(1).max(2) }),
   crowd_view: z.strictObject({ station: code, line: lineCode, level: z.enum(["l", "m", "h", "NA"]) }),
   feedback_submit: z.strictObject({ rating: z.number().int().min(1).max(5), category: z.enum(FEEDBACK_CATEGORIES) }),

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Users } from "lucide-react";
+import { AlertTriangle, RefreshCw, Users } from "lucide-react";
 import type { Board, BoardDirection, BoardPlatform } from "@/lib/server/board";
 import type { CrowdLevel, LineAlerts } from "@/lib/server/lta";
 import type { Observation } from "@/lib/predict/types";
@@ -19,6 +19,8 @@ import { BoardingButtons } from "../boarding/boarding-buttons";
 
 type Payload = { board: Board | null; alerts: LineAlerts | null; crowd: Record<string, CrowdLevel> | null };
 const POLL_MS = 30_000;
+/** Away at least this long before coming back counts as a `refresh` (resume). */
+const RESUME_AFTER_MS = 60_000;
 
 export function LiveBoard({ slug, initial }: { slug: string; initial: Payload }) {
   const { t } = useI18n();
@@ -28,9 +30,16 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
   const [mine, setMine] = useState<Observation[]>([]);
   const key = `mrt_board_${slug}`;
   const loadRef = useRef<() => Promise<void>>(async () => {});
+  const { track } = useAnalytics();
+  const trackRef = useRef(track);
+  useEffect(() => {
+    trackRef.current = track;
+  }, [track]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let stopped = false;
+    let hiddenAt: number | null = null;
     const load = async () => {
       try {
         const res = await fetch(`/api/board?station=${encodeURIComponent(slug)}`, { cache: "no-store" });
@@ -59,7 +68,16 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
       void load();
     }, 0);
     const poll = setInterval(() => document.visibilityState === "visible" && void load(), POLL_MS);
-    const onVisible = () => document.visibilityState === "visible" && void load();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") {
+        hiddenAt = Date.now();
+        return;
+      }
+      // Back after a while = the rider checking the board again.
+      if (hiddenAt !== null && Date.now() - hiddenAt >= RESUME_AFTER_MS) trackRef.current("refresh", { surface: "board", trigger: "resume" });
+      hiddenAt = null;
+      void load();
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       stopped = true;
@@ -78,6 +96,15 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
     void loadRef.current();
   }, []);
 
+  const refresh = useCallback(async () => {
+    track("refresh", { surface: "board", trigger: "manual" });
+    setRefreshing(true);
+    setNow(nowMs());
+    setMine(myReadings(nowMs()));
+    await loadRef.current();
+    setRefreshing(false);
+  }, [track]);
+
   const board = data.board;
   if (!board) return <p className="text-muted">{t("board.loading")}</p>;
   const lines = board.platforms.map((p) => p.line);
@@ -94,7 +121,17 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
       {board.platforms.map((p) => (
         <PlatformCard key={p.code} platform={p} now={now || board.now} crowd={data.crowd?.[p.code]} mine={mine} onSaved={onSaved} />
       ))}
-      <p className="text-xs text-muted">{t("board.updated", { time: clock(board.now) })}</p>
+      <div className="flex items-center gap-3 text-xs text-muted">
+        <p>{t("board.updated", { time: clock(board.now) })}</p>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 font-semibold disabled:opacity-60"
+        >
+          <RefreshCw size={12} aria-hidden className={refreshing ? "animate-spin" : undefined} /> {t("board.refresh")}
+        </button>
+      </div>
     </section>
   );
 }

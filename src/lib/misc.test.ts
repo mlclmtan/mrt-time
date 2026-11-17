@@ -6,6 +6,7 @@ import { shouldPromptNps, NPS_COOLDOWN_MS } from "./analytics/nps";
 import { parseRange, parseWindows } from "./server/admin";
 import { disruptionMessage } from "./push/disruptions";
 import { resolveBuildInfo, updateAvailable, versionLabel } from "./build-info";
+import { telegramChannelUrl } from "./telegram";
 
 describe("proxy page-hit logging", () => {
   const req = (headers: Record<string, string>) => new NextRequest("https://mrt.example/plan", { headers: { accept: "text/html", ...headers } });
@@ -29,6 +30,14 @@ describe("proxy page-hit logging", () => {
 });
 
 describe("small helpers", () => {
+  it("Telegram channel link accepts plain t.me channels only", () => {
+    expect(telegramChannelUrl("https://t.me/mrt_time/")).toBe("https://t.me/mrt_time");
+    expect(telegramChannelUrl(undefined)).toBeNull();
+    expect(telegramChannelUrl("https://evil.example/mrt_time")).toBeNull();
+    expect(telegramChannelUrl("https://t.me/+invitehash123")).toBeNull();
+    expect(telegramChannelUrl("javascript:alert(1)//t.me/abcde")).toBeNull();
+  });
+
   it("page types", () => {
     expect(pageTypeFor("/", "visitor")).toBe("landing");
     expect(pageTypeFor("/", "owner")).toBe("owner_home");

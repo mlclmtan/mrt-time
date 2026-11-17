@@ -2,6 +2,27 @@
 import { useState } from "react";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
+import { telegramChannelUrl } from "@/lib/telegram";
+
+const TELEGRAM = telegramChannelUrl(process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL);
+
+/** "Or follow on Telegram" when a channel is configured. */
+function TelegramLink() {
+  const { t } = useI18n();
+  const { track } = useAnalytics();
+  if (!TELEGRAM) return null;
+  return (
+    <a
+      href={TELEGRAM}
+      target="_blank"
+      rel="noopener"
+      className="inline-block text-sm font-semibold text-accent underline"
+      onClick={() => track("outbound_click", { domain: "t.me", link_type: "telegram" })}
+    >
+      {t("newsletter.telegram")}
+    </a>
+  );
+}
 
 export function NewsletterForm({ source = "landing" }: { source?: string }) {
   const { t, locale } = useI18n();
@@ -23,7 +44,12 @@ export function NewsletterForm({ source = "landing" }: { source?: string }) {
     setState(body.doubleOptIn ? "check" : "done");
   }
   if (state === "done" || state === "check")
-    return <p className="text-go">{t(state === "check" ? "newsletter.check" : "newsletter.done")}</p>;
+    return (
+      <div className="space-y-2">
+        <p className="text-go">{t(state === "check" ? "newsletter.check" : "newsletter.done")}</p>
+        <TelegramLink />
+      </div>
+    );
   return (
     <form onSubmit={submit} className="space-y-2">
       <div className="flex gap-2">
@@ -36,6 +62,7 @@ export function NewsletterForm({ source = "landing" }: { source?: string }) {
         <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" /> {t("newsletter.consent")}
       </label>
       {state === "error" && <p className="text-sm text-bad">{t("reading.error")}</p>}
+      <TelegramLink />
     </form>
   );
 }

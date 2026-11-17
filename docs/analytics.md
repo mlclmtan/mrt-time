@@ -91,7 +91,8 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `app_installed` | `platform` | Browser `appinstalled` event (`analytics-provider.tsx`). iOS Safari does not fire it; use `standalone_open` / `standalone=yes` for iOS. |
 | `standalone_open` | — | First page load per browser session in standalone display mode |
 | `share` | `method` (`web_share\|copy`), `content_type` (`station\|journey\|app\|media_kit`) | Share button (`share-button.tsx`) |
-| `outbound_click` | `domain` (hostname), `link_type` (`bus\|lta\|other`) | Bus-app link in a line alert banner (`live-board.tsx`) |
+| `outbound_click` | `domain` (hostname), `link_type` (`bus\|lta\|telegram\|other`) | Bus-app link in a line alert banner (`live-board.tsx`); Telegram channel link under the newsletter form (`newsletter-form.tsx`, only when `NEXT_PUBLIC_TELEGRAM_CHANNEL_URL` is set) |
+| `refresh` | `surface` (`board\|app`), `trigger` (`manual\|resume\|update`) | Station board **Refresh** button (`manual`); the board re-fetching when the page becomes visible again after ≥ 1 min away (`resume`, i.e. a rider checking again); the update banner's reload (`app` + `update`). The 30-s background poll is not tracked. |
 | `alert_view` | `line`, `status` (1–2, LTA status) | Alert banner shown, once per line per mount (`live-board.tsx`) |
 | `crowd_view` | `station` (code), `line`, `level` (`l\|m\|h\|NA`) | Crowd chip data present on a platform card (`live-board.tsx`) |
 | `feedback_submit` | `rating` (1–5), `category` (`accuracy, planner, design, bug, idea, other`) | After `/api/feedback` succeeds. The optional text goes to Neon only. |

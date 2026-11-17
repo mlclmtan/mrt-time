@@ -2,13 +2,16 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { currentBuild, updateAvailable, versionLabel } from "@/lib/build-info";
+import { flush } from "@/lib/analytics/client";
 import { useI18n } from "./i18n";
+import { useAnalytics } from "./analytics/analytics-provider";
 
 const CHECK_EVERY_MS = 5 * 60_000;
 
 /** Ask /api/version on open, on visibilitychange and every 5 min; offer a reload. */
 export function UpdateBanner() {
   const { t } = useI18n();
+  const { track } = useAnalytics();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const local = currentBuild().buildId;
@@ -42,7 +45,11 @@ export function UpdateBanner() {
   return (
     <button
       type="button"
-      onClick={() => window.location.reload()}
+      onClick={() => {
+        track("refresh", { surface: "app", trigger: "update" });
+        flush(); // send before the page goes away
+        window.location.reload();
+      }}
       className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-led px-4 py-2 text-sm font-semibold text-black"
       aria-live="polite"
     >

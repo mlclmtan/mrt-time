@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { EVENT_NAMES, EVENT_SCHEMAS, cleanReferrer, cleanRoute, envelopeSchema, validateEvent } from "./events";
@@ -29,8 +31,20 @@ describe("event taxonomy", () => {
         "ad_impression", "ad_viewable", "ad_click",
         // v2
         "boarded_logged", "alighted_logged", "timeline_edit", "stats_view", "geo_suggest_shown", "geo_suggest_accepted",
+        // revamp gap: "refresh" from the draft spec
+        "refresh",
       ].sort(),
     );
+  });
+
+  it("every event is in the GTM trigger regex and the catalogue in the docs", () => {
+    const setup = readFileSync(join(process.cwd(), "docs/ga4-setup.md"), "utf8");
+    const regex = /^\^\((.+)\)\$$/m.exec(setup)?.[1].split("|") ?? [];
+    const catalogue = readFileSync(join(process.cwd(), "docs/analytics.md"), "utf8");
+    for (const name of EVENT_NAMES) {
+      expect(regex, `${name} missing from the GTM trigger regex`).toContain(name);
+      expect(catalogue, `${name} missing from docs/analytics.md`).toContain(`\`${name}\``);
+    }
   });
 
   it("no event schema has an email, name or free-text field", () => {
@@ -57,6 +71,9 @@ describe("event taxonomy", () => {
     expect(validateEvent("feedback_submit", { rating: 4, category: "bug", text: "hi" }).ok).toBe(false);
     expect(validateEvent("made_up", {}).ok).toBe(false);
     expect(validateEvent("web_vital", { metric: "LCP", value: 1234.5, rating: "good" }).ok).toBe(true);
+    expect(validateEvent("refresh", { surface: "board", trigger: "manual" }).ok).toBe(true);
+    expect(validateEvent("refresh", { surface: "board", trigger: "manual", station: "orchard" }).ok).toBe(false);
+    expect(validateEvent("outbound_click", { domain: "t.me", link_type: "telegram" }).ok).toBe(true);
   });
 
   it("strips query strings from routes and referrers", () => {

@@ -56,7 +56,7 @@ Built-in variable `Event` must be enabled (it is by default).
 2. **New** → **Custom Event**, name `MRT events`, event name (tick **Use regex matching**):
 
 ```
-^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital|ad_impression|ad_viewable|ad_click)$
+^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital|ad_impression|ad_viewable|ad_click|boarded_logged|alighted_logged|timeline_edit|stats_view|geo_suggest_shown|geo_suggest_accepted|refresh)$
 ```
 
 Update this list when you add an event.
@@ -103,7 +103,7 @@ Admin → **Data display** → **Custom definitions** → **Create custom dimens
 
 `data_source` is in `GA4_DIMENSIONS` but is only sent to the **sandbox** property; do not register it here.
 
-Useful optional extras: `page_type`, `mode`, `basis`, `verdict`, `platform`, `content_type`, `category`. Standard properties have a cap on event-scoped custom dimensions (verify in the UI); the list above uses 16.
+Useful optional extras: `page_type`, `mode`, `basis`, `verdict`, `platform`, `content_type`, `category`, `trigger` (on `refresh`: manual / resume / update). Standard properties have a cap on event-scoped custom dimensions (verify in the UI); the list above uses 16.
 
 Caveat: `station` holds a slug (`outram-park`) on `page_view`/`station_view` and a platform code (`TE17`) on board events. Always pair it with an event-name filter.
 
