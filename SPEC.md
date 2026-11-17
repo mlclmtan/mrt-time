@@ -1,4 +1,4 @@
-# MRT Time — v2.2 spec
+# MRT Time — v2.3 spec
 
 Public web app (PWA) that predicts Singapore MRT train arrivals from timed platform-board readings (no operator live-arrival feed exists), plans door-to-door commutes with transfers, and doubles as a **real marketing/analytics practice product** (GA4, GTM, ads tracking, KOL tracking, SEO, experiments).
 
@@ -73,7 +73,7 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 - Anonymous device id (random, localStorage + first-party cookie), session id (30-min inactivity), event name, props (jsonb, zod-validated, no PII, no free text), route, referrer, UTM params (first-touch + last-touch stored per device), viewport, standalone flag, language, experiment assignments, Vercel geo headers (country/region/city only), coarse UA (browser/os/device type). No IP stored (store a salted daily hash only for rate limiting).
 - Server-side page-hit logging so non-consenting visitors are counted anonymously in aggregate (no device id without consent? → store device id only when analytics consent granted; otherwise aggregate-only row).
 - Web Vitals (LCP/INP/CLS/TTFB) via `web-vitals` → event_log.
-- Event taxonomy documented in `docs/analytics.md` and mirrored to GA4 (same names): page_view, station_view, journey_view, planner_query, prediction_view, prediction_feedback, log_reading, log_trip_event, submit_reading, install_prompt_shown, app_installed, standalone_open, share, outbound_click, alert_view, crowd_view, feedback_submit, nps_submit, newsletter_signup, experiment_exposure, kol_landing, campaign_landing, consent_update, web_vital.
+- Event taxonomy documented in `docs/analytics.md` and mirrored to GA4 (same names): page_view, station_view, journey_view, planner_query, prediction_view, prediction_feedback, log_reading, log_trip_event, submit_reading, install_prompt_shown, app_installed, standalone_open, share, outbound_click, alert_view, crowd_view, feedback_submit, nps_submit, newsletter_signup, experiment_exposure, kol_landing, campaign_landing, consent_update, web_vital, refresh (v2.3).
 ### 8b. GA4 + GTM
 - Load via **GTM** (`NEXT_PUBLIC_GTM_ID`) with a dataLayer; fallback direct gtag if only `NEXT_PUBLIC_GA_MEASUREMENT_ID` set. **Consent Mode v2 basic:** nothing Google/Meta/Clarity loads until consent; consent banner (accept / reject / customise: analytics, marketing) + Settings toggle; consent_update event.
 - Custom dimensions sent as event params: station, line, direction, journey_type, confidence, standalone, language, user_type (owner/analyst/visitor), experiment_id, variant, kol_handle, campaign.
@@ -91,7 +91,7 @@ Live at `mrt.91208274.xyz`. Repo is PUBLIC: never commit personal data (home/off
 ### 8e. Experiments
 - `experiments` table (key, variants, weights, active); server-assigned sticky bucket (cookie); `experiment_exposure` event; results view in admin (conversion = planner_query / install / newsletter by variant with simple significance note). First experiment: landing hero headline + CTA.
 ### 8f. Voice of customer
-- Feedback widget (rating + category + optional text → Neon only, never to GA/Meta) and NPS prompt (after 3rd visit, max once/30 days). Newsletter signup (email stored in Neon with consent timestamp; double opt-in deferred if no email provider env `RESEND_API_KEY` — then just store).
+- Feedback widget (rating + category + optional text → Neon only, never to GA/Meta) and NPS prompt (after 3rd visit, max once/30 days). Newsletter signup (email stored in Neon with consent timestamp; double opt-in deferred if no email provider env `RESEND_API_KEY` — then just store). Optional Telegram channel link under the form (v2.3, `NEXT_PUBLIC_TELEGRAM_CHANNEL_URL`, plain `t.me` channels only).
 ### 8g. Microsoft Clarity
 - `NEXT_PUBLIC_CLARITY_ID`, loads only with analytics consent, masking strict.
 ### 8h. Admin dashboard `/admin`
@@ -182,6 +182,15 @@ Owner live check of v2.1.0 (10 Nov 12:10, taps boarded EW17 10:14 / TE17 10:17):
 
 ### 21b. v2.2.0 polish from live check
 Hermes's live screenshots of v2.1.1 (393×852, owner + visitor): "Arrived ~10:25?" asked once, on the big button (§6); owner privacy on public pages — visitors see times only, "seen" (§16); the header's "3 min" badge (it read like a countdown) is now a static brand mark beside the app name, also on the OG card; the phone tab row fades out at whichever edge hides more tabs and scrolls the current tab to the middle (no clipped tab without a hint); plain words — "Add a reading" → **Log a train** (記錄列車), "board reading" → **platform screen** (月台顯示屏) in all user-facing copy (internal names unchanged); door tips wrap with the icon on the first line (§6); no Next departures while on board (§6); Circle Line remodelled as the post-Stage-6 loop with sources, and the zh-Hant names checked (§18, `docs/data-sources.md`). No migration.
+
+### 21c. v2.3.0 revamp-spec gap close
+An audit of `SPEC-revamp-draft.md` (3 Nov) against v2.2.0 found the draft built except for these items (full table in `REVAMP-PROGRESS.md`):
+- **Vercel Web Analytics + Speed Insights** (`@vercel/analytics`, `@vercel/speed-insights` Next.js components): off unless `NEXT_PUBLIC_VERCEL_ANALYTICS` / `NEXT_PUBLIC_VERCEL_SPEED_INSIGHTS` = `1`; analytics consent and visitors only; `beforeSend` keeps origin + path + `utm_*` and drops sends after consent is withdrawn. Privacy and consent copy name Vercel.
+- **Search Console:** `GOOGLE_SITE_VERIFICATION` renders the verification meta tag (well-formed tokens only); setup steps in `docs/ga4-setup.md` §13.
+- **`refresh` event** (`surface` board|app, `trigger` manual|resume|update): station board **Refresh** button, the board re-fetching after ≥ 1 min away, the update banner's reload.
+- **Telegram channel** link (§8f), `outbound_click.link_type = telegram`.
+- **BigQuery starter SQL** `docs/bigquery/01–04` (sessions, funnel, retention, attribution).
+- Docs fix: the GTM trigger regex now includes the v2 events (it had dropped them); a test keeps it and `docs/analytics.md` in sync with the taxonomy. No migration.
 
 ## 22. Backlog (next version)
 - iPhone Shortcut logging (owner declined for now).

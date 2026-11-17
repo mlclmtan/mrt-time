@@ -178,7 +178,16 @@ Audiences only collect members from creation onward.
 2. GA4 Admin → **Product links** → **BigQuery links** → **Link** → choose project → data location (e.g. `asia-southeast1`) → **Daily** export (Streaming optional, billed) → Submit.
 3. Tables appear as `PROJECT.analytics_<PROPERTY_ID>.events_YYYYMMDD` from the next day; no backfill of earlier data.
 
-Example: planner queries per day by origin station, excluding internal traffic:
+**Starter queries** in [`docs/bigquery/`](bigquery/) (paste into the BigQuery console, replace `PROJECT` and `PROPERTY_ID`; each leaves out internal traffic and uses SGT dates). They also run on the practice property's dataset:
+
+| File | Question it answers |
+|---|---|
+| [`01-sessions.sql`](bigquery/01-sessions.sql) | Sessions, engaged sessions, engagement rate and engaged time per day, by device and installed-app use |
+| [`02-funnel.sql`](bigquery/02-funnel.sql) | Closed funnel open → prediction → planner → install (iOS installs counted via `standalone_open`) |
+| [`03-retention.sql`](bigquery/03-retention.sql) | Weekly cohorts by first-visit week, retention per week since |
+| [`04-attribution.sql`](bigquery/04-attribution.sql) | `planner_query` credited by first touch (user) vs last touch (session) source / medium |
+
+Two more inline examples. Planner queries per day by origin station, excluding internal traffic:
 
 ```sql
 SELECT

@@ -2,7 +2,7 @@
 
 Singapore MRT next-train times predicted from **timed platform screens** (what riders log from the platform's next-train screen) (there is no operator live-arrival feed), a **door-to-door commute planner** with transfers, and a **real marketing/analytics practice product** (GA4 + GTM, Meta Pixel + CAPI, Clarity, KOL and campaign tracking, experiments, SEO).
 
-Live at <https://mrt.91208274.xyz> · v2.2.0 · spec: [SPEC.md](SPEC.md)
+Live at <https://mrt.91208274.xyz> · v2.3.0 · spec: [SPEC.md](SPEC.md)
 
 > This repo is public. Personal data (home/office, owner email, real trip logs and readings) lives only in the database, seeded from the gitignored `private/seed.json`. Tests use synthetic fixtures only.
 
@@ -18,8 +18,8 @@ Live at <https://mrt.91208274.xyz> · v2.2.0 · spec: [SPEC.md](SPEC.md)
 | Owner | Google / passkey sign-in (`ALLOWED_EMAILS`), journey-aware logging with big **I boarded / Got off** buttons, time chips, the platform preselected from the journey or GPS (one tap to change) and 10 s undo; **Today's trip** timeline (edit time, delete, add a missed step, minutes waiting / riding / changing / walking); **/me/stats** (door→desk and desk→door, waits, Outram Park changes, rides, weekly trend, weekday, best time to leave); one-tap board entry for the next journey platform, saved journeys with editable leg minutes and best-door tips, "leave now" Web Push via QStash, disruption pushes. |
 | Crowd-sourcing | **Log a train** at `/add` (one screen: station → which way, named like the board → minutes; `/submit` redirects) and the inline station-page entry post `{ station, direction, minutes[], seenAt }`; public readings: rate limit 10/hour per device + daily IP hash; auto-approved when within ±2 min of an approved reading (or same-day prediction) in the same 30-min window, else moderated in `/admin/submissions`. Hermes posts readings/events to `/api/ingest`. |
 | Accuracy | `/accuracy` replays, for every real boarding, what we would have shown two minutes before and scores it (±1 min) by line, time band and station. |
-| Analytics | First-party `event_log` in Neon (zod-validated, no PII), Consent Mode v2 basic, GTM/gtag mirror, Meta Pixel + CAPI dedup, Clarity, Web Vitals, server-side anonymous page hits, first/last-touch UTM, internal-traffic flag, practice GA4 sandbox with synthetic data + cost CSV. |
-| Marketing | KOLs (`/k/[handle]`, `/r/[code]`), campaign builder with QR (SVG/PNG), experiments (landing hero A/B), feedback, NPS, newsletter (Resend double opt-in), `/media-kit`, EN / 繁體中文 (`/zh-Hant/...`), sitemap, robots, OG images, JSON-LD. |
+| Analytics | First-party `event_log` in Neon (zod-validated, no PII), Consent Mode v2 basic, GTM/gtag mirror, Meta Pixel + CAPI dedup, Clarity, Web Vitals, Vercel Web Analytics + Speed Insights (env-flagged, analytics consent, visitors only), server-side anonymous page hits, first/last-touch UTM, internal-traffic flag, `refresh` (board Refresh / resume / update reload), Search Console verification tag, BigQuery starter SQL (sessions, funnel, retention, attribution) in `docs/bigquery/`, practice GA4 sandbox with synthetic data + cost CSV. |
+| Marketing | KOLs (`/k/[handle]`, `/r/[code]`), campaign builder with QR (SVG/PNG), experiments (landing hero A/B), feedback, NPS, newsletter (Resend double opt-in) + optional Telegram channel link, `/media-kit`, EN / 繁體中文 (`/zh-Hant/...`), sitemap, robots, OG images, JSON-LD. |
 | Ads | Publisher side: Google AdSense (`NEXT_PUBLIC_ADSENSE_CLIENT` + slot ids, consent-gated, non-personalised without marketing consent, `/ads.txt`) and in-house "house ads" simulating Meta feed/story and Google display/search units, with targeting, pacing, frequency cap, A/B weights, impression/viewable/click tracking, GA4 `ad_*` events and an Ads report in admin. See [docs/ads-setup.md](docs/ads-setup.md). |
 | Admin | `/admin`: DAU/WAU/MAU, new vs returning, sessions, engaged time, top pages/stations/journeys, referrers/UTM, geo, device/standalone, hour × weekday heatmap, weekly retention, funnel, Web Vitals p75, API latency p50/p95, accuracy, submissions queue, campaigns, KOLs, experiments, feedback/NPS, sandbox runs, CSV export. Analysts (`ANALYST_EMAILS`) get read-only analytics. |
 | PWA | Installable standalone app, safe areas, `100dvh`, version tag `v<pkg> · <sha> · <SGT build time>` on Home and Settings, update banner via `/api/version`. |
@@ -81,7 +81,8 @@ docs/                  setup guides (below)
 ## Docs
 
 - [docs/analytics.md](docs/analytics.md) — event taxonomy, dimensions, privacy model, metric definitions
-- [docs/ga4-setup.md](docs/ga4-setup.md) — GA4/GTM admin steps (key events, custom definitions, audiences, explorations, BigQuery, Looker Studio, internal traffic, Google Ads)
+- [docs/ga4-setup.md](docs/ga4-setup.md) — GA4/GTM admin steps (key events, custom definitions, audiences, explorations, BigQuery, Looker Studio, Search Console, internal traffic, Google Ads)
+- [docs/bigquery/](docs/bigquery/) — starter SQL for the GA4 BigQuery export: sessions, funnel, retention cohorts, first- vs last-touch attribution
 - [docs/meta-setup.md](docs/meta-setup.md) — Pixel + Conversions API + test events
 - [docs/sandbox.md](docs/sandbox.md) — practice property, Measurement Protocol limits, cost import
 - [docs/kol-playbook.md](docs/kol-playbook.md) — creating KOLs, links, codes, dashboard
