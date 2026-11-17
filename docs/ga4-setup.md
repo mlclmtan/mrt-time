@@ -12,6 +12,8 @@ Google moves menus around often. Paths below match the GA4/GTM UI as documented 
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | `G-XXXXXXX` | Used directly via gtag **only when no GTM id is set** (`send_page_view:false`). Also on the sandbox's "never send here" list. |
 | `GA_PRODUCTION_MEASUREMENT_ID` | `G-XXXXXXX` | Set this when you use GTM only, so the sandbox guard still knows the production id. |
 | `NEXT_PUBLIC_GOOGLE_ADS_ID` | `AW-XXXXXXXXX` | gtag config under marketing consent, **gtag fallback only**. With GTM, add Ads tags inside GTM instead (section 10). |
+| `GOOGLE_SITE_VERIFICATION` | token from Search Console's HTML-tag method | Renders the `google-site-verification` meta tag (section 13). Not needed with DNS verification. |
+| `NEXT_PUBLIC_VERCEL_ANALYTICS` / `NEXT_PUBLIC_VERCEL_SPEED_INSIGHTS` | `1` | Vercel Web Analytics / Speed Insights after analytics consent (see [analytics.md](analytics.md#vercel-web-analytics--speed-insights)). |
 
 `NEXT_PUBLIC_*` values are inlined at build time; redeploy after changing them.
 
@@ -237,7 +239,18 @@ Suggested pages:
 | Retention | Cohort table from BigQuery |
 | Performance (Neon) | Web Vitals p75, API latency p50/p95, prediction accuracy |
 
-## 13. Verify consent mode
+## 13. Google Search Console
+
+Organic search data for the landing page and the per-station pages (`/station/<slug>`, `/zh-Hant/station/<slug>`).
+
+1. search.google.com/search-console → **Add property**.
+   - **Domain** property (`91208274.xyz`, covers every subdomain): verify with the DNS TXT record Search Console shows. Recommended; no app change.
+   - **URL prefix** property (`https://mrt.91208274.xyz/`): choose **HTML tag**, copy only the `content` value into the server env var `GOOGLE_SITE_VERIFICATION` and redeploy. The root layout renders `<meta name="google-site-verification">` only for a well-formed token (`siteVerification()` in `src/lib/seo.ts`).
+2. **Sitemaps** → submit `https://mrt.91208274.xyz/sitemap.xml` (every public page and station, with zh-Hant alternates).
+3. **Settings → Associations** → link the production GA4 property (Search Console reports then appear under GA4 **Reports → Library**; verify the collection is published there).
+4. Use **URL inspection** on one station page to confirm it is indexable (the private areas `/admin`, `/me`, `/settings`, `/sign-in` are disallowed in `robots.txt` and marked `noindex`).
+
+## 14. Verify consent mode
 
 1. Fresh incognito window → open the site, **don't** answer the banner. DevTools → Network: there must be **no** requests to `googletagmanager.com`, `google-analytics.com`, `connect.facebook.net` or `clarity.ms`.
 2. tagassistant.google.com → **Add domain** → `https://mrt.91208274.xyz` → Connect. Accept **analytics only**.

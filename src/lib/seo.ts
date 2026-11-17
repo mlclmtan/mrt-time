@@ -13,6 +13,16 @@ export function appUrl() {
   }
 }
 
+/**
+ * Google Search Console HTML-tag verification (`GOOGLE_SITE_VERIFICATION`,
+ * the `content` value Search Console shows). Validated so an env value can
+ * never inject markup; unset or malformed → no tag (verify by DNS instead).
+ */
+export function siteVerification(raw = process.env.GOOGLE_SITE_VERIFICATION): Metadata["verification"] {
+  const token = raw?.trim();
+  return token && /^[A-Za-z0-9_-]{20,100}$/.test(token) ? { google: token } : undefined;
+}
+
 export function pageMetadata(opts: { locale: Locale; path: string; title: string; description: string; image?: string; noindex?: boolean }): Metadata {
   const url = localePath(opts.locale, opts.path);
   return {

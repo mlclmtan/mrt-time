@@ -23,6 +23,7 @@ import {
   writeConsent,
 } from "@/lib/analytics/client";
 import { ThirdPartyScripts } from "./third-party-scripts";
+import { VercelInsights } from "./vercel-insights";
 
 type Track = <N extends EventName>(name: N, props: EventProps<N>) => void;
 type Ctx = {
@@ -171,6 +172,9 @@ export function AnalyticsProvider({
     <AnalyticsContext.Provider value={value}>
       {children}
       {consent.decided && <ThirdPartyScripts consent={consent} ids={IDS} internal={internal} />}
+      {consent.decided && (
+        <VercelInsights consent={consent} internal={internal} stillAllowed={() => consentRef.current.analytics} />
+      )}
     </AnalyticsContext.Provider>
   );
 }

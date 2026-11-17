@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { EVENT_NAMES, EVENT_SCHEMAS, cleanReferrer, cleanRoute, envelopeSchema, validateEvent } from "./events";
 import { consentModeSignals, parseConsent, serializeConsent } from "./consent";
 import { cleanIds, thirdPartyScripts } from "./scripts";
+import { vercelInsights, vercelSafeUrl } from "./vercel";
 import { buildCampaignUrl, kolUtm, utmFromSearch, utmToken } from "./utm";
 import { assignAll, assignVariant, significance, DEFAULT_EXPERIMENTS } from "./experiments";
 import { ga4Params, metaEventFor, privacyProps } from "./mapping";
@@ -118,6 +119,25 @@ describe("consent and third-party scripts", () => {
     expect(direct.map((s) => s.id)).toEqual(["consent-defaults", "gtag-src", "gtag-config", "meta-pixel", "clarity"]);
     expect(direct.find((s) => s.id === "gtag-config")!.inline).toContain("traffic_type:'internal'");
     expect(direct.find((s) => s.id === "gtag-config")!.inline).toContain("send_page_view:false");
+  });
+
+  it("Vercel Analytics / Speed Insights: env flag + analytics consent + visitors only", () => {
+    const both = { analytics: true, speedInsights: true };
+    expect(vercelInsights({ analytics: false }, both, false)).toEqual({ analytics: false, speedInsights: false });
+    expect(vercelInsights({ analytics: true }, both, true)).toEqual({ analytics: false, speedInsights: false });
+    expect(vercelInsights({ analytics: true }, both, false)).toEqual(both);
+    expect(vercelInsights({ analytics: true }, { analytics: false, speedInsights: true }, false)).toEqual({
+      analytics: false,
+      speedInsights: true,
+    });
+  });
+
+  it("Vercel URLs keep the path and UTM only", () => {
+    expect(vercelSafeUrl("https://mrt.example/station/orchard?email=a@b.c&utm_source=tiktok&utm_campaign=launch#x")).toBe(
+      "https://mrt.example/station/orchard?utm_source=tiktok&utm_campaign=launch",
+    );
+    expect(vercelSafeUrl("https://mrt.example/plan?from=a&to=b")).toBe("https://mrt.example/plan");
+    expect(vercelSafeUrl("not a url")).toBe("");
   });
 
   it("rejects IDs that could inject script", () => {

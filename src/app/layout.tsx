@@ -4,7 +4,7 @@ import { getLocale } from "@/lib/i18n/server";
 import { htmlLang, makeT } from "@/lib/i18n";
 import { getSession } from "@/lib/auth/server";
 import { experimentAssignments } from "@/lib/server/experiments";
-import { appUrl } from "@/lib/seo";
+import { appUrl, siteVerification } from "@/lib/seo";
 import { I18nProvider } from "@/components/i18n";
 import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
 import { ConsentBanner } from "@/components/analytics/consent-banner";
@@ -28,6 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
     },
     formatDetection: { telephone: false },
+    verification: siteVerification(),
   };
 }
 

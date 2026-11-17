@@ -12,7 +12,7 @@ vi.mock("@/lib/auth/server", () => ({ getSession: async () => null }));
 import sitemap from "@/app/sitemap";
 import robots from "@/app/robots";
 import manifest from "@/app/manifest";
-import { pageMetadata, stationJsonLd, websiteJsonLd, jsonLdString, DEFAULT_APP_URL } from "./seo";
+import { pageMetadata, siteVerification, stationJsonLd, websiteJsonLd, jsonLdString, DEFAULT_APP_URL } from "./seo";
 import { getStation, STATIONS } from "./network";
 import { localePath, makeT, splitLocale, translate } from "./i18n";
 import { en, zhHant } from "./i18n/dict";
@@ -79,6 +79,13 @@ describe("landing SEO outputs", () => {
 
   it("per-page metadata can be noindex", () => {
     expect(pageMetadata({ locale: "en", path: "/x", title: "X", description: "Y", noindex: true }).robots).toEqual({ index: false, follow: false });
+  });
+
+  it("Search Console verification tag only for a well-formed token", () => {
+    expect(siteVerification("abcDEF123_-abcDEF123_-xyz")).toEqual({ google: "abcDEF123_-abcDEF123_-xyz" });
+    expect(siteVerification(undefined)).toBeUndefined();
+    expect(siteVerification("short")).toBeUndefined();
+    expect(siteVerification('abcdefghijklmnopqrstuv"><script>')).toBeUndefined();
   });
 });
 

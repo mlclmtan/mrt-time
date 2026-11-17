@@ -11,6 +11,7 @@ browser ──track(name, props)──┬─► POST /api/events ──► event
                               └─► fbq(track, …, {eventID})        ──► Meta Pixel
 proxy (src/proxy.ts) ── no consent at all ──► aggregate-only page_view row in event_log
 Clarity ── loaded with analytics consent only (session replay/heatmaps, masking set in Clarity)
+Vercel Web Analytics + Speed Insights ── analytics consent, visitors only, env-flagged (see below)
 ```
 
 | Layer | Code | Notes |
@@ -31,7 +32,7 @@ If `DATABASE_URL` is unset, nothing is stored; the third-party mirrors still wor
 
 Consent cookie `mrt_consent` = `v1.a<0|1>.m<0|1>.<unix-seconds>` (365 days). Missing or malformed = denied/undecided. Google Consent Mode v2 **basic**: no Google, Meta or Clarity script is injected until the visitor grants something.
 
-| Consent state | First-party (`event_log`) | GA4 / GTM | Meta Pixel + CAPI | Clarity |
+| Consent state | First-party (`event_log`) | GA4 / GTM | Meta Pixel + CAPI | Clarity, Vercel |
 |---|---|---|---|---|
 | None / undecided / rejected all | Proxy writes one `page_view` per HTML/RSC request: `aggregate_only=true`, `origin=server`, no device/session id, `page_type=other`. Client `track()` sends nothing. | Not loaded | Not loaded / not sent | Not loaded |
 | Marketing only | Client events stored `aggregate_only=true` (device/session id stripped server-side) | GTM loads (if `NEXT_PUBLIC_GTM_ID`) with `analytics_storage=denied`; gtag fallback loads only the Ads id | Pixel loads; CAPI forwards mapped events | Not loaded |
@@ -55,6 +56,15 @@ Consent cookie `mrt_consent` = `v1.a<0|1>.m<0|1>.<unix-seconds>` (365 days). Mis
 | `mrt_utm_first`, `mrt_utm_last`, `mrt_kol` | localStorage | analytics consent | first/last touch, KOL attribution |
 | `mrt_nps`, `mrt_install_dismissed`, `mrt_standalone` (sessionStorage) | browser | always | UI state only |
 | `_ga*`, `_fbp`/`_fbc`, Clarity cookies | third-party tags | only after the matching consent | set by Google/Meta/Microsoft |
+
+### Vercel Web Analytics + Speed Insights
+
+Free-tier page views (Web Analytics) and real-user Core Web Vitals (Speed Insights) in the Vercel dashboard, next to the first-party `web_vital` events. Code: `src/lib/analytics/vercel.ts`, `src/components/analytics/vercel-insights.tsx` (official `@vercel/analytics` / `@vercel/speed-insights` Next.js components, which follow client-side route changes).
+
+- Off unless `NEXT_PUBLIC_VERCEL_ANALYTICS=1` / `NEXT_PUBLIC_VERCEL_SPEED_INSIGHTS=1` **and** the feature is enabled in the Vercel project (Analytics / Speed Insights tab → Enable; then redeploy).
+- Mounted only with **analytics** consent and only for visitors (owner/analyst traffic is never sent; Vercel has no internal-traffic filter).
+- `beforeSend` reduces every URL to origin + path + `utm_*` (other query strings and hashes can carry PII) and drops the event if analytics consent was withdrawn since the page loaded.
+- Vercel Web Analytics is cookieless; it sets no entry in the storage table below. Hobby-tier quotas apply (check the Vercel usage page); when the quota is used up, collection pauses and nothing in the app changes.
 
 ## Event catalogue
 
