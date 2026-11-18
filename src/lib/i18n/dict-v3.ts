@@ -63,6 +63,19 @@ export const v3En = {
   "trip.catch.tight": "Tight",
   "trip.catch.likely": "Likely",
   "trip.catch.easy": "Easy",
+
+  // Stations page (t3)
+  "stations.searchPlaceholder": "Search stations (English, 中文, code)",
+  "stations.tab.frequent": "Frequent",
+  "stations.tab.nearMe": "Near me",
+  "stations.tab.az": "A–Z",
+  "stations.tab.byLine": "By line",
+  "stations.section.pinned": "Pinned",
+  "stations.section.recent": "Recent",
+  "stations.empty.myStations": "Stations you open show up here",
+  "stations.action.pin": "Pin station",
+  "stations.action.unpin": "Unpin station",
+  "stations.nextTrain": "Next train",
 } as const;
 
 export const v3Zh: Record<keyof typeof v3En, string> = {
@@ -126,4 +139,17 @@ export const v3Zh: Record<keyof typeof v3En, string> = {
   "trip.catch.tight": "時間緊迫",
   "trip.catch.likely": "很可能搭上",
   "trip.catch.easy": "充裕",
+
+  // Stations page (t3)
+  "stations.searchPlaceholder": "搜尋車站（英文、中文、路線代碼）",
+  "stations.tab.frequent": "常用",
+  "stations.tab.nearMe": "附近",
+  "stations.tab.az": "A–Z",
+  "stations.tab.byLine": "按路線",
+  "stations.section.pinned": "已釘選",
+  "stations.section.recent": "最近造訪",
+  "stations.empty.myStations": "你打開過的車站會顯示在這裡",
+  "stations.action.pin": "釘選車站",
+  "stations.action.unpin": "取消釘選車站",
+  "stations.nextTrain": "下一班車",
 };

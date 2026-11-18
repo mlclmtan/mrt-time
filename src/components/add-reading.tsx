@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { directionChoices, getStation, PLATFORMS, searchStations } from "@/lib/network";
 import { lastUsedStation } from "@/lib/readings/entry";
+import { recordStationUse } from "@/lib/stations/usage";
 import { useI18n } from "./i18n";
 import { QuickEntry } from "./board/quick-entry";
 import { BoardingButtons } from "./boarding/boarding-buttons";
@@ -141,7 +142,10 @@ export function AddReading({ defaultStation, defaultDirection }: { defaultStatio
             direction={picked.direction}
             destination={picked.board[locale]}
             startOpen
-            onSaved={() => setSavedTo(slug)}
+            onSaved={() => {
+              if (slug) recordStationUse(slug, Date.now(), "reading");
+              setSavedTo(slug);
+            }}
           />
           {savedTo && (
             <Link href={href(`/station/${savedTo}`)} className="mt-3 inline-block text-sm font-semibold text-accent underline">
@@ -161,7 +165,10 @@ export function AddReading({ defaultStation, defaultDirection }: { defaultStatio
             line={picked.line}
             direction={picked.direction}
             destination={picked.board[locale]}
-            onSaved={() => setSavedTo(slug)}
+            onSaved={() => {
+              if (slug) recordStationUse(slug, Date.now(), "boarding");
+              setSavedTo(slug);
+            }}
           />
         </section>
       )}

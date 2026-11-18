@@ -12,9 +12,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function StationsPage() {
   const { t } = await getT();
   return (
-    <div className="space-y-4 pt-6">
-      <h1 className="text-3xl font-bold">{t("stations.title")}</h1>
-      <p className="text-muted">{t("stations.intro", { n: STATIONS.length })}</p>
+    <div className="space-y-3 pt-3">
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("stations.title")}</h1>
+      <p className="hidden text-sm text-muted sm:block">{t("stations.intro", { n: STATIONS.length })}</p>
       <StationsList />
     </div>
   );

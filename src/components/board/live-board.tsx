@@ -10,6 +10,7 @@ import { BUS_APP_URL } from "@/lib/push/disruptions";
 import { clock } from "@/lib/format";
 import { nowMs } from "@/lib/time";
 import type { LineCode } from "@/lib/network/data";
+import { recordStationUse } from "@/lib/stations/usage";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 import { DirectionTimes } from "./direction-times";
@@ -36,6 +37,10 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
     trackRef.current = track;
   }, [track]);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    recordStationUse(slug, Date.now(), "view");
+  }, [slug]);
 
   useEffect(() => {
     let stopped = false;
@@ -90,11 +95,12 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
 
   // Saved: show exact times at once (own reading), then re-fetch for everyone's view.
   const onSaved = useCallback(() => {
+    recordStationUse(slug, Date.now(), "reading");
     const at = nowMs();
     setNow(at);
     setMine(myReadings(at));
     void loadRef.current();
-  }, []);
+  }, [slug]);
 
   const refresh = useCallback(async () => {
     track("refresh", { surface: "board", trigger: "manual" });
