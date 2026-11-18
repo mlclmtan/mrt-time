@@ -5,7 +5,7 @@
  * leg 2 → arrive).
  */
 import { HOUR, MINUTE, sgtDate, sgtMinuteOfDay } from "../time";
-import type { Confidence } from "../predict/types";
+import type { Confidence, Prediction } from "../predict/types";
 import { PLATFORMS } from "../network/data";
 import { journeySteps, nextStepIndex, JOURNEY_SWITCH_HOUR, type Step } from "./steps";
 import {
@@ -321,6 +321,8 @@ export type CommuteView = {
   /** The trip if you set off at progress.startAt (finished: the next trip, from now). */
   leaveNow: DepartureRow | null;
   rows: DepartureRow[];
+  /** Per-platform predictions for platforms in this journey, keyed by "code|direction". */
+  predictions?: Record<string, Prediction>;
 };
 
 /**

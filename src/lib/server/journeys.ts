@@ -7,7 +7,9 @@ import { DIRECTION_KEY_RE, LINE_CODE_LIST, PLATFORM_CODE_RE, findRoutes, getPlat
 import { planForward, planLeaveBy, planList, routeToLegs, type Leg, type Plan, type TrainSource } from "../journey/plan";
 import { isRainy, predictionSource } from "../journey/source";
 import { commuteView, type CommuteProgress, type CommuteView } from "../journey/commute";
-import { predictionData, type PredictionData } from "./board";
+import { predictionData, predictOptions, type PredictionData } from "./board";
+import { predict } from "../predict";
+import type { Prediction } from "../predict/types";
 import { publicReason } from "../predict/privacy";
 import { forecastFor, twoHourForecast } from "./weather";
 import { affectedLines, lineAlerts } from "./lta";
@@ -126,11 +128,25 @@ export async function planJourney(legs: Leg[], mode: PlanMode, at: number, opts:
  * moment ago becomes the same-day anchor immediately.
  */
 export async function commuteFor(journey: OwnerJourney, progress: CommuteProgress, now: number): Promise<CommuteView> {
-  // Finished (or about to be): the next trip is planned over the whole journey.
-  const rides = ridesOf(progress.state === "finished" || progress.state === "on_board" || progress.state === "between" ? journey.legs : journey.legs.slice(progress.fromLeg));
-  const data = await predictionData([...new Set(rides.map((r) => r.from))], [...new Set(rides.map((r) => r.line))], now).catch(() => null);
+  // Load predictions for all rides in the journey so transfer platforms are known.
+  const allRides = ridesOf(journey.legs);
+  const data = await predictionData([...new Set(allRides.map((r) => r.from))], [...new Set(allRides.map((r) => r.line))], now).catch(() => null);
   const source = data ? sourceFor(data) : predictionSource([], undefined);
-  return commuteView(journey.key, journey.legs, progress, source, now);
+  const view = commuteView(journey.key, journey.legs, progress, source, now);
+  if (data) {
+    const predictions: Record<string, Prediction> = {};
+    for (const r of allRides) {
+      predictions[`${r.from}|${r.direction}`] = predict({
+        line: r.line,
+        direction: r.direction,
+        station: r.from,
+        now,
+        ...predictOptions(data, r.line),
+      });
+    }
+    return { ...view, predictions };
+  }
+  return view;
 }
 
 /** Legs for a public route between two stations (≤ 2 transfers). */
