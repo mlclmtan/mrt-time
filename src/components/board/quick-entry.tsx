@@ -163,9 +163,9 @@ export function QuickEntry({
 
       {open && (
         <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-8 gap-1.5" role="group" aria-label={t("entry.tapHint")}>
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-2" role="group" aria-label={t("entry.tapHint")}>
             {CHIP_MINUTES.map((m) => (
-              <button key={m} type="button" onClick={() => tap(m)} className="btn btn-secondary h-11 min-w-0 px-0 text-lg tabular">
+              <button key={m} type="button" onClick={() => tap(m)} className="btn btn-secondary h-11 min-h-[44px] min-w-[44px] px-2 text-lg tabular flex items-center justify-center">
                 {m}
               </button>
             ))}
@@ -192,17 +192,19 @@ export function QuickEntry({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" className="btn btn-primary min-h-11 px-5" disabled={!filled || status.kind === "busy"} onClick={() => void save()}>
-          {t("entry.save")}
-        </button>
+        {filled > 0 && (
+          <button type="button" className="btn btn-primary min-h-11 px-5" disabled={status.kind === "busy"} onClick={() => void save()}>
+            {t("entry.save")}
+          </button>
+        )}
         {!open && !filled && (
-          <button type="button" className="text-sm text-accent underline" onClick={() => setOpen(true)}>
+          <button type="button" className="text-sm text-accent underline min-h-[44px] inline-flex items-center" onClick={() => setOpen(true)}>
             {t("entry.tapHint")}
           </button>
         )}
         <span className="text-xs text-muted">
           {t("entry.seenAt", { time: seenLabel })} ·{" "}
-          <button type="button" className="text-accent underline" onClick={() => setEditTime((v) => !v)} aria-expanded={editTime}>
+          <button type="button" className="text-accent underline min-h-[44px] inline-flex items-center" onClick={() => setEditTime((v) => !v)} aria-expanded={editTime}>
             {t("entry.change")}
           </button>
         </span>

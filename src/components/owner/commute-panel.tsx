@@ -54,6 +54,23 @@ function rideReason(t: T, r: RideCell, now: number, locale: "en" | "zh-Hant") {
 export const LEAVE_NOW_MS = 30_000;
 
 /**
+ * Resolves the departure row to display in the main card.
+ * Once "leave by" for the first departure row has passed, returns the
+ * NEXT departure the rider can still catch (leaveAt > now).
+ */
+export function activeDeparture(
+  rows: DepartureRow[],
+  defaultLeaveNow: DepartureRow | null,
+  now: number,
+): DepartureRow | null {
+  if (!rows.length) return defaultLeaveNow;
+  const first = rows[0];
+  if (!now || now <= first.leaveAt) return first;
+  const nextCatchable = rows.find((r) => r.leaveAt > now);
+  return nextCatchable ?? rows[rows.length - 1] ?? defaultLeaveNow;
+}
+
+/**
  * Header of the pre-departure card: "Leave in m:ss" while leave-by is more
  * than 30 s away, "Leave now" in the last 30 s, "You've missed this one,
  * next: HH:MM" once it has passed.
@@ -99,8 +116,8 @@ export function CommutePanel({
   // train already boarded. Back once the trip is finished or dismissed.
   const moving = MOVING.includes(progress.state) || (tripState != null && MOVING.includes(tripState));
   const departures = moving ? [] : rows;
-  const first = rows[0];
-  const untilFirst = first ? (first.rides[0]?.boardAt ?? first.leaveAt) - now : 0;
+  const active = activeDeparture(rows, leaveNow, now) ?? leaveNow;
+  const untilFirst = active ? (active.rides[0]?.boardAt ?? active.leaveAt) - now : 0;
   const ranged = departures.some((r) => r.ranged);
 
   return (
@@ -116,20 +133,20 @@ export function CommutePanel({
           <h2 id="leave-now" className="font-semibold tabular" aria-live="off">
             {idle ? leaveHeader(t, rows, now) : t("commute.continueNow")}
           </h2>
-          {first && now > 0 && (
+          {active && now > 0 && (
             <span className="tabular text-sm text-muted" aria-live="off">
               {idle
-                ? t("commute.leaveBy", { time: clock(first.leaveAt) })
+                ? t("commute.leaveBy", { time: clock(active.leaveAt) })
                 : untilFirst > 0
                   ? t("commute.trainIn", { time: countdown(untilFirst) })
                   : t("commute.leaveGo")}
             </span>
           )}
         </div>
-        <p className="led mt-1 text-3xl font-bold">{arriveText(t, leaveNow)}</p>
-        <p className="tabular text-xs text-muted">{t("commute.bestWorst", { best: clock(leaveNow.best), worst: clock(leaveNow.worst) })}</p>
+        <p className="led mt-1 text-3xl font-bold">{arriveText(t, active)}</p>
+        <p className="tabular text-xs text-muted">{t("commute.bestWorst", { best: clock(active.best), worst: clock(active.worst) })}</p>
         <ul className="mt-3 space-y-2 text-sm">
-          {leaveNow.rides.map((r, i) => (
+          {active.rides.map((r, i) => (
             <li key={`${r.from}-${i}`} className="space-y-0.5">
               <div className="flex flex-wrap items-center gap-2">
                 <LineChip line={r.line} />
@@ -142,8 +159,8 @@ export function CommutePanel({
               <p className="text-xs text-muted">{rideReason(t, r, now || view.generatedAt, locale)}</p>
               {r.tip && (
                 // The icon sits on the first line; the whole tip wraps (never cut short).
-                <p className="door-tip flex items-start gap-1.5 text-xs leading-5 text-led">
-                  <DoorOpen size={16} aria-hidden className="mt-0.5 shrink-0" />
+                <p className="door-tip flex items-start gap-1.5 text-[17px] leading-6 text-led">
+                  <DoorOpen size={18} aria-hidden className="mt-0.5 shrink-0" />
                   <span className="min-w-0 flex-1 break-words whitespace-normal">
                     {t("commute.doors")}: {r.tip}
                   </span>

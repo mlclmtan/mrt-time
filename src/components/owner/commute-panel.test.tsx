@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MINUTE, sgtClock, sgtInstant } from "@/lib/time";
 import { makeT } from "@/lib/i18n";
 import type { Leg, TrainSchedule, TrainSource } from "@/lib/journey/plan";
-import { commuteView } from "@/lib/journey/commute";
+import { commuteView, type DepartureRow } from "@/lib/journey/commute";
 import { predictionSource } from "@/lib/journey/source";
-import { CommutePanel, leaveHeader } from "./commute-panel";
+import { CommutePanel, leaveHeader, activeDeparture } from "./commute-panel";
 
 // Synthetic fixtures only (2026-11-03 is a Tuesday).
 const at = (clock: string) => sgtInstant("2026-11-03", clock);
@@ -77,5 +77,51 @@ describe("CommutePanel", () => {
     expect(html).toContain("Clock times shift at this hour — showing ranges.");
     expect(html).toMatch(/Arrive \d\d:\d\d–\d\d:\d\d/);
     expect(html).toMatch(/Wait 0–\d+ min/);
+  });
+
+  describe("activeDeparture (missed train bugfix, problem 5)", () => {
+    const fixedRows = [
+      { leaveAt: at("12:56"), arriveAt: at("13:22"), best: at("13:19"), worst: at("13:32"), ranged: true, rides: [] },
+      { leaveAt: at("13:02"), arriveAt: at("13:28"), best: at("13:25"), worst: at("13:38"), ranged: true, rides: [] },
+      { leaveAt: at("13:08"), arriveAt: at("13:34"), best: at("13:31"), worst: at("13:44"), ranged: true, rides: [] },
+    ] as unknown as DepartureRow[];
+
+    it("shows the first departure while its leave-by has not passed", () => {
+      const active = activeDeparture(fixedRows, null, at("12:55"));
+      expect(active?.leaveAt).toBe(at("12:56"));
+      expect(active?.arriveAt).toBe(at("13:22"));
+    });
+
+    it("at exact leave-by timestamp, rider can still catch the first departure", () => {
+      const active = activeDeparture(fixedRows, null, at("12:56"));
+      expect(active?.leaveAt).toBe(at("12:56"));
+    });
+
+    it("once leave-by has passed (12:56:01), shows the NEXT catchable departure (13:02) and its arrival", () => {
+      const afterFirstPassed = at("12:56") + 1000;
+      const active = activeDeparture(fixedRows, null, afterFirstPassed);
+      expect(active?.leaveAt).toBe(at("13:02"));
+      expect(active?.arriveAt).toBe(at("13:28"));
+      expect(active?.best).toBe(at("13:25"));
+    });
+
+    it("once second leave-by has also passed (13:03), shows the third departure (13:08)", () => {
+      const afterSecondPassed = at("13:03");
+      const active = activeDeparture(fixedRows, null, afterSecondPassed);
+      expect(active?.leaveAt).toBe(at("13:08"));
+      expect(active?.arriveAt).toBe(at("13:34"));
+    });
+
+    it("when leave-by has passed, rendered CommutePanel displays next catchable train's leave-by and arrival", () => {
+      const view = commuteView("office_to_home", legs, { state: "idle", fromLeg: 0, startAt: at("18:00") }, timed, at("18:00"));
+      // view.rows[0].leaveAt is 18:03, view.rows[1].leaveAt is 18:08
+      const now = view.rows[0].leaveAt + 5000; // 18:03:05
+      const html = renderToStaticMarkup(<CommutePanel view={view} now={now} staleAt={null} />);
+      // Shows NEXT departure he can still catch:
+      expect(html).toContain("Leave by 18:08");
+      expect(html).not.toContain("Leave by 18:03");
+      // Arrival for 18:08 departure is 18:35 (not 18:29)
+      expect(html).toContain("Arrive ~18:35");
+    });
   });
 });

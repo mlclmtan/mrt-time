@@ -166,4 +166,10 @@ describe("owner Home layout (H2) and next step (F10)", () => {
     expect(text).toBe("10:14 10:13 10:12 10:09 Other time");
     expect(html).toContain('aria-label="Now, 10:14"');
   });
+
+  it("one-tap live time (problem 6): owner Home has no time chips before tap", () => {
+    const html = render(at("09:00"), []);
+    expect(html).not.toContain('aria-label="Now, 09:00"');
+    expect(html).not.toContain("Other time");
+  });
 });

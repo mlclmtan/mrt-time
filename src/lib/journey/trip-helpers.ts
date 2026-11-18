@@ -5,17 +5,14 @@
  * - Transfer catch train calculation
  * - Seconds-resolution clock formatting for the undo toast
  */
-import { SGT_OFFSET, MINUTE } from "../time";
+import { MINUTE, sgtClockSeconds } from "../time";
 import type { Leg } from "./plan";
 import type { CommuteState, TapKind } from "./commute";
 import { getPlatform, stationForCode, type LineCode, getDirection } from "../network";
 import type { DictKey, Locale } from "../i18n";
 import type { BoardArrival } from "../predict/board-view";
 
-/** Clock with seconds in Singapore Time (SGT): "10:14:32". */
-export function sgtClockSeconds(instant: number): string {
-  return new Date(instant + SGT_OFFSET).toISOString().slice(11, 19);
-}
+export { sgtClockSeconds };
 
 /** Formats the toast text with seconds: "Boarded 10:14:32". */
 export function formatToastSeconds(

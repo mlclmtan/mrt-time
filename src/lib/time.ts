@@ -19,6 +19,10 @@ export function sgtDate(instant: number): string {
 export function sgtClock(instant: number): string {
   return new Date(instant + SGT_OFFSET).toISOString().slice(11, 16);
 }
+/** "08:20:15" in Singapore. */
+export function sgtClockSeconds(instant: number): string {
+  return new Date(instant + SGT_OFFSET).toISOString().slice(11, 19);
+}
 /** ISO weekday in Singapore: 1 = Monday … 7 = Sunday. */
 export function sgtWeekday(instant: number): number {
   const day = new Date(instant + SGT_OFFSET).getUTCDay();

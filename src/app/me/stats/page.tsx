@@ -120,7 +120,7 @@ export default async function StatsPage() {
         {tripCount === 0 && <p className="text-sm text-muted">{t("stats.empty")}</p>}
       </Section>
 
-      <Section title={t("stats.best.title")}>
+      <Section title={`${t("stats.best.title")} (${unit})`}>
         {best ? (
           <p className="text-lg">
             {t("stats.best.body", { from: best.slot, to: clockFromMinutes(clockMinutes(best.slot) + 9), n: best.median, count: best.count })}
@@ -166,7 +166,7 @@ export default async function StatsPage() {
         )}
       </Section>
 
-      <Section title={t("stats.week.title")}>
+      <Section title={`${t("stats.week.title")} (${unit})`}>
         <TrendChart
           points={stats.weekly.map((w) => ({ label: t("stats.week.of", { date: w.weekStart.slice(5) }), values: [w.toWork, w.toHome] }))}
           series={twoSeries}
@@ -176,7 +176,7 @@ export default async function StatsPage() {
         />
       </Section>
 
-      <Section title={t("stats.weekday.title")}>
+      <Section title={`${t("stats.weekday.title")} (${unit})`}>
         <BarChart
           points={stats.byWeekday.map((d) => ({ label: t(`stats.day.${d.weekday}` as DictKey), values: [d.toWork, d.toHome] }))}
           series={twoSeries}

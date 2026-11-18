@@ -228,6 +228,7 @@ function DirectionRow({
   const { t, locale } = useI18n();
   const { track } = useAnalytics();
   const [voted, setVoted] = useState(false);
+  const [screenOpen, setScreenOpen] = useState(false);
   const p = withLocalReading(direction.prediction, mine, { line: platform.line, direction: direction.key, station: platform.code, now });
   const view = directionView(p, now, platform.line, lastSeenAt(direction.seenToday, now));
   const viewed = useRef(false);
@@ -239,14 +240,10 @@ function DirectionRow({
 
   const destination = (direction.board ?? direction.label)[locale];
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-baseline gap-2">
-        <span className="text-xs text-muted">{t("board.towards")}</span>
-        <span className="font-semibold">{destination}</span>
-      </div>
-      <DirectionTimes view={view} now={now} />
+    <div className="px-4 py-3" data-direction-row={`${platform.code}:${direction.key}`}>
+      <DirectionTimes view={view} now={now} destination={destination} />
       {view.state === "exact" && (
-        <div className="mt-2 flex gap-2 text-xs">
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
           {voted ? (
             <span className="text-go">{t("board.thanks")}</span>
           ) : (
@@ -254,7 +251,7 @@ function DirectionRow({
               <button
                 key={v}
                 type="button"
-                className="rounded-full border border-line px-2.5 py-1 text-muted"
+                className="min-h-[44px] px-3.5 py-2 inline-flex items-center justify-center rounded-full border border-line text-sm text-muted hover:text-foreground active:scale-95"
                 onClick={() => {
                   track("prediction_feedback", { station: platform.code, line: platform.line, direction: direction.key, verdict: v });
                   setVoted(true);
@@ -269,8 +266,37 @@ function DirectionRow({
       <SeenToday trains={direction.seenToday ?? []} />
       {view.state !== "closed" && (
         <>
-          <QuickEntry station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
           <BoardingButtons station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
+          {!screenOpen ? (
+            <button
+              type="button"
+              onClick={() => setScreenOpen(true)}
+              className="mt-2 min-h-[44px] w-full py-2.5 px-3 rounded-xl border border-line bg-panel-2 text-sm font-semibold text-muted hover:text-foreground active:scale-95 flex items-center justify-center gap-2"
+            >
+              <span>{t("trip.action.screenSays")}</span>
+            </button>
+          ) : (
+            <div className="mt-2 space-y-2">
+              <QuickEntry
+                station={platform.code}
+                line={platform.line}
+                direction={direction.key}
+                destination={destination}
+                onSaved={() => {
+                  setScreenOpen(false);
+                  onSaved();
+                }}
+                onUndone={onSaved}
+              />
+              <button
+                type="button"
+                onClick={() => setScreenOpen(false)}
+                className="min-h-[44px] px-3 text-xs text-muted hover:text-foreground active:scale-95 flex items-center"
+              >
+                {t("trip.action.undo") === "Undo" ? "Cancel" : "取消"}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

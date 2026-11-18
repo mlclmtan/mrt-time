@@ -50,12 +50,24 @@ export function ConsentBanner() {
           {t("consent.body")}
         </p>
         {custom && (
-          <div className="flex gap-4 text-sm">
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)} /> {t("consent.analytics")}
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex min-h-[44px] items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-6 w-6 rounded border-line accent-led cursor-pointer shrink-0"
+                checked={analytics}
+                onChange={(e) => setAnalytics(e.target.checked)}
+              />{" "}
+              <span>{t("consent.analytics")}</span>
             </label>
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} /> {t("consent.marketing")}
+            <label className="flex min-h-[44px] items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-6 w-6 rounded border-line accent-led cursor-pointer shrink-0"
+                checked={marketing}
+                onChange={(e) => setMarketing(e.target.checked)}
+              />{" "}
+              <span>{t("consent.marketing")}</span>
             </label>
           </div>
         )}
@@ -86,14 +98,24 @@ export function ConsentSettings() {
   const { consent, setConsent } = useAnalytics();
   const { t } = useI18n();
   return (
-    <div className="space-y-2 text-sm">
-      <label className="flex items-center gap-2">
-        <input type="checkbox" checked={consent.analytics} onChange={(e) => setConsent({ analytics: e.target.checked, marketing: consent.marketing })} />{" "}
-        {t("consent.analytics")}
+    <div className="space-y-1 text-base">
+      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer py-1">
+        <input
+          type="checkbox"
+          className="h-6 w-6 rounded border-line accent-led cursor-pointer shrink-0"
+          checked={consent.analytics}
+          onChange={(e) => setConsent({ analytics: e.target.checked, marketing: consent.marketing })}
+        />{" "}
+        <span>{t("consent.analytics")}</span>
       </label>
-      <label className="flex items-center gap-2">
-        <input type="checkbox" checked={consent.marketing} onChange={(e) => setConsent({ analytics: consent.analytics, marketing: e.target.checked })} />{" "}
-        {t("consent.marketing")}
+      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer py-1">
+        <input
+          type="checkbox"
+          className="h-6 w-6 rounded border-line accent-led cursor-pointer shrink-0"
+          checked={consent.marketing}
+          onChange={(e) => setConsent({ analytics: consent.analytics, marketing: e.target.checked })}
+        />{" "}
+        <span>{t("consent.marketing")}</span>
       </label>
     </div>
   );

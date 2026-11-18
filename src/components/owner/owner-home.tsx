@@ -17,18 +17,18 @@ import {
   type NextStep,
   type TapKind,
 } from "@/lib/journey/commute";
-import { clock } from "@/lib/format";
+import { clock, clockSeconds } from "@/lib/format";
 import { getDirection, getPlatform, stationForCode, type LineCode } from "@/lib/network";
 import { MINUTE, nowMs } from "@/lib/time";
 import { randomId } from "@/lib/analytics/client";
-import { NOW_CHOICE, UNDO_MS, minutesBack, resolveTime, timeSourceOf, type TimeChoice } from "@/lib/sightings/client";
+import { UNDO_MS, minutesBack } from "@/lib/sightings/client";
+import { formatToastSeconds } from "@/lib/journey/trip-helpers";
 import type { DictKey } from "@/lib/i18n";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 import { QuickEntry } from "../board/quick-entry";
 import { Planner } from "../plan/planner";
 import { VersionFooter } from "../version-footer";
-import { TimeChips } from "../boarding/time-chips";
 import { PlatformPicker, type PlatformChoice } from "../boarding/platform-picker";
 import { useTapQueue } from "../boarding/tap-queue";
 import { CommutePanel } from "./commute-panel";
@@ -83,7 +83,6 @@ export function OwnerHome({
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => initialView?.generatedAt ?? 0);
   const [refresh, setRefresh] = useState(0);
-  const [time, setTime] = useState<TimeChoice>(NOW_CHOICE);
   const [override, setOverride] = useState<PlatformChoice | null>(null);
   /** "Arrived ~10:25?" dismissed for the trip whose last tap was at this time (also a cookie). */
   const [dismissedAt, setDismissedAt] = useState<number | null>(initialDismissedAt);
@@ -219,8 +218,8 @@ export function OwnerHome({
 
   async function log(kind: TapKind, opts: { at?: number; timeSource?: "now" | "chosen" } = {}) {
     const tapped = nowMs();
-    const at = opts.at ?? resolveTime(time, tapped);
-    const timeSource = opts.timeSource ?? timeSourceOf(time);
+    const at = opts.at ?? tapped;
+    const timeSource = opts.timeSource ?? "now";
     const usesPlatform = kind === "at_platform" || kind === "board" || kind === "alight";
     const step: Step | undefined = steps.slice(nextIdx).find((s) => s.kind === kind) ?? steps.find((s) => s.kind === kind);
     const platform = usesPlatform && selected ? getPlatform(selected.station) : step?.station ? getPlatform(step.station) : undefined;
@@ -229,7 +228,6 @@ export function OwnerHome({
     // Progress (and so the departures request) updates from this immediately.
     setLogged((l) => [...l, { id: -Date.now(), kind, at, station: platform?.code ?? null, line: platform?.line ?? null, direction: direction ?? null, journeyKey: key, clientId }]);
     setNow(tapped);
-    setTime(NOW_CHOICE);
     setOverride(null);
     track("log_trip_event", { kind, ...(platform ? { station: platform.code, line: platform.line as LineCode } : {}) });
     if ((kind === "board" || kind === "alight") && platform && direction)
@@ -254,11 +252,12 @@ export function OwnerHome({
     if (!res) {
       // No signal (underground): keep it on the phone with its own time; sent when back online.
       queue.enqueue("/api/trip-events", body);
-      setToast({ clientId, id: null, at, kind, text: t("queue.saved", { time: clock(at) }), until: tapped + UNDO_MS, queued: true });
+      setToast({ clientId, id: null, at, kind, text: t("queue.saved", { time: clockSeconds(at) }), until: tapped + UNDO_MS, queued: true });
       return;
     }
     const saved = res.ok ? ((await res.json().catch(() => null)) as { id?: number | null } | null) : null;
-    setToast({ clientId, id: saved?.id ?? null, at, kind, text: t("owner.logged", { what: label(kind), time: clock(at) }), until: tapped + UNDO_MS });
+    const toastText = formatToastSeconds(kind, at, t);
+    setToast({ clientId, id: saved?.id ?? null, at, kind, text: toastText, until: tapped + UNDO_MS });
     await reload();
   }
 
@@ -275,7 +274,7 @@ export function OwnerHome({
   async function fixTime(minutes: number) {
     if (!toast?.id) return;
     const at = toast.at - minutes * MINUTE;
-    setToast({ ...toast, at, text: t("owner.logged", { what: label(toast.kind), time: clock(at) }) });
+    setToast({ ...toast, at, text: formatToastSeconds(toast.kind, at, t) });
     await fetch("/api/trip-events", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: toast.id, at: new Date(at).toISOString() }) }).catch(() => null);
     await reload();
   }
@@ -326,22 +325,33 @@ export function OwnerHome({
       )}
       {toast && (
         <div role="status" className="space-y-2 rounded-lg bg-go/10 px-3 py-2 text-sm">
-          <div className="flex items-center gap-3">
-            <span className={`flex-1 ${toast.queued ? "text-warn" : ""}`}>{toast.text}</span>
+          <div className="flex items-center justify-between gap-3">
+            <span className={`flex-1 font-semibold ${toast.queued ? "text-warn" : "text-go"}`}>{toast.text}</span>
             {!toast.queued && (
-              <button type="button" className="font-semibold text-led" onClick={() => void undo()}>
+              <button
+                type="button"
+                className="min-h-[44px] min-w-[44px] px-3 font-semibold text-led hover:text-led/80 active:scale-95 flex items-center justify-center"
+                onClick={() => void undo()}
+              >
                 {t("owner.undo")}
               </button>
             )}
           </div>
           {toast.id != null && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-muted">{t("time.fix")}</span>
-              {FIX_MINUTES.map((m) => (
-                <button key={m} type="button" className="tabular rounded-full border border-line px-2.5 py-1" onClick={() => void fixTime(m)}>
-                  {clock(toast.at - m * MINUTE)}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/40 pt-2 text-xs">
+              <span className="text-muted">{t("trip.action.wrongTime")}</span>
+              <div className="flex items-center gap-2">
+                {FIX_MINUTES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="min-h-[44px] min-w-[44px] px-3 py-2 rounded-lg border border-line bg-panel-2 font-semibold text-xs tabular flex items-center justify-center active:scale-95"
+                    onClick={() => void fixTime(m)}
+                  >
+                    {t("time.minus", { n: m })}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -353,7 +363,6 @@ export function OwnerHome({
       <section className="panel space-y-3 p-4" aria-label={t("owner.logTitle")}>
         {/* GPS never overrides the journey step (underground it is unreliable): only offered without one. */}
         <PlatformPicker key={selected ? `${selected.station}-${selected.direction}` : "none"} value={selected} onChange={setOverride} surface="home" geo={!fromStep} />
-        <TimeChips value={time} onChange={setTime} now={now} />
         <p className="text-xs text-muted">{t("owner.otherSteps")}</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {others.map((k) => (

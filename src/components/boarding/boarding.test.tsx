@@ -10,10 +10,13 @@ const JARGON = /headway|anchor|observation|sighting|propagat|\bkind\b|source|sta
 const visibleText = (html: string) => html.replace(/<[^>]+>/g, " ");
 
 describe("I boarded / Got off", () => {
-  it("shows the two big buttons and the time chips in plain words", () => {
+  it("shows the two big buttons directly with no time chips before the tap", () => {
     const html = renderToStaticMarkup(<BoardingButtons station="EW17" line="EWL" direction="TO_EAST" destination="Pasir Ris" />);
     const text = visibleText(html);
-    for (const s of ["I boarded", "Got off", "Now", "−1 min", "−2 min", "−5 min", "Other time", "Pasir Ris"]) expect(text).toContain(s);
+    for (const s of ["I boarded", "Got off", "Pasir Ris"]) expect(text).toContain(s);
+    // Time chips are removed before tap (problem 6)
+    expect(text).not.toContain("Now");
+    expect(text).not.toContain("Other time");
     expect(text).not.toMatch(JARGON);
   });
 

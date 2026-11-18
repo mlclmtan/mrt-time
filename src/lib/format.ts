@@ -1,9 +1,10 @@
 import type { T, DictKey } from "./i18n";
 import type { Prediction } from "./predict/types";
-import { sgtClock } from "./time";
+import { sgtClock, sgtClockSeconds } from "./time";
 import { stationForCode } from "./network";
 
 export const clock = (ms: number) => sgtClock(ms);
+export const clockSeconds = (ms: number) => sgtClockSeconds(ms);
 
 /**
  * A platform code in reason params ("EW17") becomes the station name; an
