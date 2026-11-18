@@ -1,40 +1,24 @@
 import Link from "next/link";
 import { getT } from "@/lib/i18n/server";
 import { localePath } from "@/lib/i18n";
-import type { Role } from "@/lib/auth/access";
 import { LanguageSwitch } from "./language-switch";
 import { UpdateBanner, VersionTag } from "./update-banner";
-import { NavTabs } from "./nav-tabs";
 import { BrandMark } from "./brand-mark";
 import { FeedbackLink } from "./voc/feedback-widget";
 
-export async function SiteHeader({ role }: { role: Role | null }) {
+export async function SiteHeader() {
   const { locale, t } = await getT();
   const href = (p: string) => localePath(locale, p);
-  const links: [string, string][] = [
-    ["/plan", t("nav.plan")],
-    ["/stations", t("nav.stations")],
-    ["/accuracy", t("nav.accuracy")],
-    ["/add", t("nav.submit")],
-  ];
-  if (role === "owner") links.push(["/me", t("nav.me")]);
-  if (role) links.push(["/admin", t("nav.admin")]);
-  links.push(["/settings", t("nav.settings")]);
-  const tabs = links.map(([path, label]) => ({ href: href(path), label }));
   return (
-    <header className="sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 backdrop-blur">
+    <header className="safe-top sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 backdrop-blur">
       <UpdateBanner />
-      <div className="flex items-center gap-3 py-3">
+      <div className="flex items-center justify-between gap-3 py-3">
         <Link href={href("/")} className="flex items-center gap-2 font-bold tracking-tight">
           <BrandMark />
           <span>{t("app.name")}</span>
         </Link>
-        <NavTabs tabs={tabs} label="Main" layout="inline" className="ml-auto hidden sm:flex" />
-        <span className="ml-auto sm:ml-0">
-          <LanguageSwitch />
-        </span>
+        <LanguageSwitch />
       </div>
-      <NavTabs tabs={tabs} label="Main mobile" layout="scroll" className="sm:hidden" />
     </header>
   );
 }
@@ -43,7 +27,7 @@ export async function SiteFooter() {
   const { locale, t } = await getT();
   const href = (p: string) => localePath(locale, p);
   return (
-    <footer className="safe-bottom border-t border-line py-6 text-xs text-muted">
+    <footer className="site-footer safe-bottom border-t border-line py-6 text-xs text-muted">
       <div className="flex flex-wrap gap-x-4 gap-y-2">
         <Link href={href("/about")}>{t("nav.about")}</Link>
         <Link href={href("/accuracy")}>{t("nav.accuracy")}</Link>

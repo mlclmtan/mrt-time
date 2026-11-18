@@ -7,6 +7,7 @@ import { VersionFooter } from "@/components/version-footer";
 import { LanguageSwitch } from "@/components/language-switch";
 import { OwnerSettings } from "@/components/owner/owner-settings";
 import { FeedbackLink } from "@/components/voc/feedback-widget";
+import { MoreSection } from "@/components/more-links";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -33,6 +34,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-muted">{t("settings.installIos")}</p>
       </section>
       {session?.user && <OwnerSettings isOwner={session.user.role === "owner"} pushReady={pushAvailable()} vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />}
+      <MoreSection role={session?.user.role ?? null} />
     </div>
   );
 }

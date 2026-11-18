@@ -10,6 +10,7 @@ import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
 import { ConsentBanner } from "@/components/analytics/consent-banner";
 import { PwaRegistration } from "@/components/pwa-registration";
 import { SiteHeader, SiteFooter } from "@/components/shell";
+import { TabBar } from "@/components/tab-bar";
 import { FeedbackWidget } from "@/components/voc/feedback-widget";
 import { NpsPrompt } from "@/components/voc/nps-prompt";
 import { InstallPrompt } from "@/components/install-prompt";
@@ -49,11 +50,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <I18nProvider locale={locale}>
           <AnalyticsProvider locale={locale} userType={userType} experiments={experiments}>
             <PwaRegistration />
-            <div className="safe-top mx-auto flex min-h-dvh max-w-5xl flex-col px-4">
-              <SiteHeader role={session?.user.role ?? null} />
-              <main className="flex-1 pb-10">{children}</main>
+            <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4">
+              <SiteHeader />
+              <main className="flex-1 pb-[calc(72px+env(safe-area-inset-bottom))]">{children}</main>
               <SiteFooter />
             </div>
+            <TabBar role={session?.user.role ?? null} />
             <InstallPrompt />
             <FeedbackWidget />
             <NpsPrompt />

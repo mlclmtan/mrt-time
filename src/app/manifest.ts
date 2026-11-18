@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "MRT Time — next train, door to door",
     short_name: "MRT Time",
     description: "Next-train times for Singapore MRT from real platform boards, plus a door-to-door planner.",
-    start_url: "/",
+    start_url: "/app",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

@@ -10,6 +10,7 @@ import { dbConfigured } from "@/lib/db";
 import { todaysEvents } from "@/lib/server/trips";
 import { localePath } from "@/lib/i18n";
 import { MeTimeline } from "@/components/owner/me-timeline";
+import { MoreSection } from "@/components/more-links";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -75,6 +76,7 @@ export default async function MePage() {
           <button className="btn btn-primary py-2 text-sm">{t("common.save")}</button>
         </form>
       ))}
+      <MoreSection role={session.user.role} />
     </div>
   );
 }
