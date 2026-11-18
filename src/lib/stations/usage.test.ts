@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultStationTab,
   getInitialUsage,
+  hasStationUsage,
   isPinned,
   loadUsage,
   rankFrequent,
@@ -199,6 +201,41 @@ describe("Station usage logic", () => {
       expect(loadUsage(null)).toEqual(getInitialUsage());
       expect(recordStationUse("test", NOW, "view", null)).toBeDefined();
       expect(toggleStationPin("test", null)).toBeDefined();
+    });
+  });
+
+  describe("hasStationUsage & defaultStationTab", () => {
+    it("returns false and defaults to 'line' when there is no usage history", () => {
+      expect(hasStationUsage(null)).toBe(false);
+      expect(hasStationUsage(undefined)).toBe(false);
+      expect(hasStationUsage(getInitialUsage())).toBe(false);
+      expect(hasStationUsage({ stations: {}, pins: [] })).toBe(false);
+      expect(defaultStationTab(getInitialUsage())).toBe("line");
+    });
+
+    it("returns false and defaults to 'line' when station records have zero count", () => {
+      const emptyUsage: StationUsageState = {
+        pins: [],
+        stations: { "outram-park": { count: 0, lastUsed: 0 } },
+      };
+      expect(hasStationUsage(emptyUsage)).toBe(false);
+      expect(defaultStationTab(emptyUsage)).toBe("line");
+    });
+
+    it("returns true and defaults to 'frequent' when stations are pinned", () => {
+      const pinnedUsage: StationUsageState = {
+        pins: ["outram-park"],
+        stations: {},
+      };
+      expect(hasStationUsage(pinnedUsage)).toBe(true);
+      expect(defaultStationTab(pinnedUsage)).toBe("frequent");
+    });
+
+    it("returns true and defaults to 'frequent' when stations have recorded uses", () => {
+      let state = getInitialUsage();
+      state = recordUse(state, "tiong-bahru", NOW, "view");
+      expect(hasStationUsage(state)).toBe(true);
+      expect(defaultStationTab(state)).toBe("frequent");
     });
   });
 });

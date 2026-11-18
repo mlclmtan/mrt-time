@@ -16,6 +16,7 @@ import {
   type StationTab,
 } from "@/lib/stations/list";
 import {
+  defaultStationTab,
   loadUsage,
   rankFrequent,
   recent,
@@ -102,14 +103,22 @@ export function StationsList() {
   const { t, locale } = useI18n();
   const { track } = useAnalytics();
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<StationTab>("frequent");
   const [usage, setUsage] = useState<StationUsageState>(loadUsage);
+  const [tab, setTab] = useState<StationTab>(() => defaultStationTab(loadUsage()));
+  const userInteractedTab = useRef(false);
   const [pinnedArrivals, setPinnedArrivals] = useState<Record<string, string>>({});
   const geo = useNearestStation();
 
   // Sync usage on change events
   useEffect(() => {
-    const handleUpdate = () => setUsage(loadUsage());
+    const handleUpdate = () => {
+      const u = loadUsage();
+      setUsage(u);
+      if (!userInteractedTab.current) {
+        setTab(defaultStationTab(u));
+      }
+    };
+    handleUpdate();
     window.addEventListener(USAGE_CHANGE_EVENT, handleUpdate);
     window.addEventListener("storage", handleUpdate);
     return () => {
@@ -268,6 +277,7 @@ export function StationsList() {
                     active ? "bg-panel-2 font-semibold text-ink shadow-sm" : "text-muted hover:text-ink"
                   }`}
                   onClick={() => {
+                    userInteractedTab.current = true;
                     if (tab !== key) {
                       track("station_sort", { mode: key });
                     }

@@ -88,4 +88,24 @@ describe("LiveBoard (problem 2 & 7: compact station page & glanceable sizes)", (
     );
     expect(html).not.toContain(">Save</button>");
   });
+
+  it("renders one row with [I boarded] [Got off] [Screen says…] side-by-side with no prompt sentence", () => {
+    const html = renderToStaticMarkup(
+      <LiveBoard slug="outram-park" initial={{ board, alerts: null, crowd: null }} />
+    );
+    // 3-column grid for buttons
+    expect(html).toContain("grid-cols-3");
+    // All 3 buttons present
+    expect(html).toContain("I boarded");
+    expect(html).toContain("Got off");
+    expect(html).toContain("Screen says…");
+    // Buttons are at least 44px tall
+    expect(html).toContain("min-h-[44px]");
+    // No visible prompt sentence
+    expect(html).not.toContain("On a train to");
+    expect(html).not.toContain("Tap when you get on or off");
+    // Estimate chip present
+    expect(html).toContain("Estimate");
+    expect(html).toContain("chip");
+  });
 });

@@ -502,7 +502,7 @@ export function TripScreen({
 
   return (
     <div
-      className="flex flex-col justify-between h-[calc(100dvh-56px-env(safe-area-inset-top)-72px-env(safe-area-inset-bottom))] max-w-lg mx-auto py-2 select-none overflow-hidden"
+      className="flex flex-col flex-1 min-h-0 justify-between max-w-lg mx-auto w-full py-1 sm:py-2 select-none gap-2"
       data-trip-screen
       data-trip-state={progress.state}
     >
@@ -599,8 +599,8 @@ export function TripScreen({
       </div>
 
       {/* 2. MIDDLE "NOW" CARD FOR CURRENT PLATFORM */}
-      <div className="flex-1 flex flex-col justify-center my-2">
-        <div className="panel rise p-4 rounded-2xl flex flex-col justify-between border border-line min-h-[220px]">
+      <div className="flex-1 min-h-0 flex flex-col my-1 sm:my-2">
+        <div className="panel rise p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between border border-line flex-1 min-h-0">
           {/* A. If ON BOARD a leg with a transfer: SHOW ARRIVAL + TRANSFER BOARD */}
           {progress.state === "on_board" && transferInfo ? (
             <div className="space-y-3">

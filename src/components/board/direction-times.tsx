@@ -69,42 +69,44 @@ export function DirectionTimes({
   };
   const [first, ...rest] = view.arrivals;
   return (
-    <div className="mt-1" data-board-state={view.state}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <div className="mt-0.5" data-board-state={view.state}>
+      <div className="flex items-baseline justify-between gap-2 overflow-hidden flex-nowrap">
         {destination && (
-          <div className="flex items-baseline gap-1.5 min-w-fit py-0.5">
-            <span className="text-xs text-muted uppercase tracking-wider">{t("board.towards")}</span>
-            <span className="font-semibold text-base sm:text-lg text-foreground">{destination}</span>
+          <div className="flex items-baseline gap-1.5 min-w-0 truncate py-0.5 shrink">
+            <span className="text-xs text-muted uppercase tracking-wider shrink-0">{t("board.towards")}</span>
+            <span className="font-semibold text-base sm:text-lg text-foreground truncate">{destination}</span>
           </div>
         )}
-        <div className="flex flex-wrap items-baseline gap-x-4 sm:gap-x-5 gap-y-1">
+        <div className="flex items-baseline gap-2.5 sm:gap-4 shrink-0">
           {first && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wider text-muted uppercase">{t("board.next")}</span>
-              <span className={`led tabular text-2xl sm:text-3xl font-bold leading-none ${est ? "opacity-80" : ""}`}>
+            <div className="flex items-baseline gap-1 shrink-0">
+              <span className="text-[11px] font-semibold tracking-wider text-muted uppercase shrink-0">{t("board.next")}</span>
+              <span className={`led tabular text-2xl font-bold leading-none ${est ? "opacity-80" : ""}`}>
                 {approx(first)}
                 {first.clock}
                 {first.plusMinus != null && <span className="ml-0.5 text-xs font-normal text-muted">{plusMinusText(t, first.plusMinus)}</span>}
               </span>
-              <span className="tabular text-[17px] font-semibold text-foreground">{inText(first.at)}</span>
+              <span className="tabular text-[17px] font-semibold text-foreground ml-0.5 shrink-0">{inText(first.at)}</span>
             </div>
           )}
           {rest.map((a) => (
-            <div key={a.at} className="flex items-baseline gap-1.5">
-              <span className="text-[11px] tracking-wider text-muted uppercase">{t("board.then")}</span>
-              <span className={`led tabular text-[17px] leading-none ${a.plusMinus != null ? "opacity-70" : "opacity-90"}`}>
+            <div key={a.at} className="flex items-baseline gap-1 shrink-0">
+              <span className="text-[11px] tracking-wider text-muted uppercase shrink-0 hidden sm:inline">{t("board.then")}</span>
+              <span className={`led tabular text-[17px] leading-none text-muted ${a.plusMinus != null ? "opacity-70" : "opacity-90"}`}>
                 {approx(a)}
                 {a.clock}
                 {a.plusMinus != null && <span className="ml-0.5 text-xs font-normal text-muted">{plusMinusText(t, a.plusMinus)}</span>}
               </span>
-              <span className="tabular text-[15px] text-muted">{inText(a.at)}</span>
+              <span className="tabular text-[15px] text-muted hidden sm:inline">{inText(a.at)}</span>
             </div>
           ))}
         </div>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-        <span className={`chip ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>{t(est ? "board.estimate" : "board.exact")}</span>
-        <span className="text-muted">{boardReasonText(t, view.reason, locale)}</span>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className={`chip py-0 px-1.5 text-[11px] font-semibold ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
+          {t(est ? "board.estimate" : "board.exact")}
+        </span>
+        <span className="text-muted text-xs truncate max-w-full">{boardReasonText(t, view.reason, locale)}</span>
       </div>
     </div>
   );

@@ -42,22 +42,26 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
   const name = station.name[locale];
   const firstLine = PLATFORMS[station.codes[0]].line;
   return (
-    <article className="space-y-6 pt-6">
+    <article className="space-y-4 pt-3 sm:pt-4">
       <JsonLd data={stationJsonLd(station, locale)} />
       <StationTracker station={slug} line={firstLine} />
-      <header className="space-y-2">
-        <div className="flex gap-1">
-          {station.codes.map((c) => (
-            <span key={c} className="chip text-white" style={{ background: LINES[PLATFORMS[c].line].color }}>
-              {c}
-            </span>
-          ))}
+      <header className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 overflow-hidden">
+            <div className="flex shrink-0 gap-1">
+              {station.codes.map((c) => (
+                <span key={c} className="chip text-white text-xs font-semibold" style={{ background: LINES[PLATFORMS[c].line].color }}>
+                  {c}
+                </span>
+              ))}
+            </div>
+            <h1 className="text-2xl font-bold truncate sm:text-3xl">{name}</h1>
+          </div>
+          <ShareButton path={localePath(locale, `/station/${slug}`)} title={`${name} · MRT Time`} contentType="station" iconOnly />
         </div>
-        <h1 className="text-3xl font-bold">{name}</h1>
-        <p className="text-sm text-muted">
+        <p className="text-xs text-muted truncate">
           {t("station.lines")}: {[...new Set(station.codes.map((c) => LINES[PLATFORMS[c].line].name[locale]))].join(" · ")}
         </p>
-        <ShareButton path={localePath(locale, `/station/${slug}`)} title={`${name} · MRT Time`} contentType="station" />
       </header>
       <LiveBoard slug={slug} initial={{ board, alerts, crowd }} />
       <AdSlot placement="station" station={slug} />

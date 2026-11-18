@@ -240,10 +240,10 @@ function DirectionRow({
 
   const destination = (direction.board ?? direction.label)[locale];
   return (
-    <div className="px-4 py-3" data-direction-row={`${platform.code}:${direction.key}`}>
+    <div className="px-3.5 py-2.5 sm:px-4 sm:py-3" data-direction-row={`${platform.code}:${direction.key}`}>
       <DirectionTimes view={view} now={now} destination={destination} />
       {view.state === "exact" && (
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+        <div className="mt-1.5 flex flex-wrap gap-2 text-xs">
           {voted ? (
             <span className="text-go">{t("board.thanks")}</span>
           ) : (
@@ -266,22 +266,24 @@ function DirectionRow({
       <SeenToday trains={direction.seenToday ?? []} />
       {view.state !== "closed" && (
         <>
-          <BoardingButtons station={platform.code} line={platform.line} direction={direction.key} destination={destination} onSaved={onSaved} onUndone={onSaved} />
-          {!screenOpen ? (
-            <button
-              type="button"
-              onClick={() => setScreenOpen(true)}
-              className="mt-2 min-h-[44px] w-full py-2.5 px-3 rounded-xl border border-line bg-panel-2 text-sm font-semibold text-muted hover:text-foreground active:scale-95 flex items-center justify-center gap-2"
-            >
-              <span>{t("trip.action.screenSays")}</span>
-            </button>
-          ) : (
-            <div className="mt-2 space-y-2">
+          <BoardingButtons
+            station={platform.code}
+            line={platform.line}
+            direction={direction.key}
+            destination={destination}
+            onSaved={onSaved}
+            onUndone={onSaved}
+            onScreenSays={() => setScreenOpen((open) => !open)}
+            showScreenSays={true}
+          />
+          {screenOpen && (
+            <div className="mt-2 space-y-2 rounded-xl border border-line bg-panel p-3">
               <QuickEntry
                 station={platform.code}
                 line={platform.line}
                 direction={direction.key}
                 destination={destination}
+                startOpen={true}
                 onSaved={() => {
                   setScreenOpen(false);
                   onSaved();
@@ -293,7 +295,7 @@ function DirectionRow({
                 onClick={() => setScreenOpen(false)}
                 className="min-h-[44px] px-3 text-xs text-muted hover:text-foreground active:scale-95 flex items-center"
               >
-                {t("trip.action.undo") === "Undo" ? "Cancel" : "取消"}
+                {locale === "zh-Hant" ? "取消" : "Cancel"}
               </button>
             </div>
           )}

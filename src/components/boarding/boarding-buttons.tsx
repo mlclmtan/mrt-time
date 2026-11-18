@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, Sparkles } from "lucide-react";
 import {
   MAX_BACKDATE_MIN,
   PUBLIC_MAX_BACKDATE_MIN,
@@ -39,6 +39,8 @@ export function BoardingButtons({
   destination,
   onSaved,
   onUndone,
+  onScreenSays,
+  showScreenSays = false,
 }: {
   station: string;
   line: LineCode;
@@ -47,6 +49,8 @@ export function BoardingButtons({
   destination: string;
   onSaved?: (s: { kind: SightingKindInput; at: number }) => void;
   onUndone?: () => void;
+  onScreenSays?: () => void;
+  showScreenSays?: boolean;
 }) {
   const { t } = useI18n();
   const { track, deviceId, userType } = useAnalytics();
@@ -108,19 +112,43 @@ export function BoardingButtons({
     await save(what, Math.max(tapped - maxBack * MINUTE, at - minutes * MINUTE), tapped, "chosen");
   }
 
+  const hasThreeButtons = showScreenSays || Boolean(onScreenSays);
+
   return (
-    <div className="mt-3 rounded-xl border border-line bg-bg/40 p-3" data-boarding={`${station}:${direction}`}>
-      <p className="text-sm text-muted">{t("boarding.prompt", { dest: destination })}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-primary min-h-14 text-lg" disabled={status.kind === "busy"} onClick={() => void log("boarded")}>
-          <LogIn size={18} aria-hidden /> {t("boarding.boarded")}
+    <div className="mt-2" data-boarding={`${station}:${direction}`}>
+      <span className="sr-only">{destination}</span>
+      <div className={`grid gap-2 ${hasThreeButtons ? "grid-cols-3" : "grid-cols-2"}`}>
+        <button
+          type="button"
+          className="btn btn-primary min-h-[44px] h-11 py-1 px-2 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5"
+          disabled={status.kind === "busy"}
+          onClick={() => void log("boarded")}
+        >
+          <LogIn size={15} aria-hidden className="shrink-0" />
+          <span>{t("boarding.boarded")}</span>
         </button>
-        <button type="button" className="btn btn-secondary min-h-14 text-lg" disabled={status.kind === "busy"} onClick={() => void log("alighted")}>
-          <LogOut size={18} aria-hidden /> {t("boarding.gotOff")}
+        <button
+          type="button"
+          className="btn btn-secondary min-h-[44px] h-11 py-1 px-2 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5"
+          disabled={status.kind === "busy"}
+          onClick={() => void log("alighted")}
+        >
+          <LogOut size={15} aria-hidden className="shrink-0" />
+          <span>{t("boarding.gotOff")}</span>
         </button>
+        {hasThreeButtons && (
+          <button
+            type="button"
+            onClick={onScreenSays}
+            className="btn btn-secondary min-h-[44px] h-11 py-1 px-2 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5"
+          >
+            <Sparkles size={15} aria-hidden className="shrink-0" />
+            <span className="truncate">{t("trip.action.screenSays")}</span>
+          </button>
+        )}
       </div>
       {status.kind === "saved" && (
-        <div role="status" className="mt-3 space-y-2 rounded-lg bg-go/10 px-3 py-2 text-sm">
+        <div role="status" className="mt-2 space-y-1.5 rounded-lg bg-go/10 px-3 py-2 text-xs">
           <div className="flex items-center justify-between gap-3">
             <span className="flex-1 font-semibold text-go">
               {status.pending
@@ -140,14 +168,14 @@ export function BoardingButtons({
               {t("entry.undo")}
             </button>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/40 pt-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/40 pt-1.5 text-xs">
             <span className="text-muted">{t("trip.action.wrongTime")}</span>
             <div className="flex items-center gap-2">
               {FIX_MINUTES.map((m) => (
                 <button
                   key={m}
                   type="button"
-                  className="min-h-[44px] min-w-[44px] px-3 py-2 rounded-lg border border-line bg-panel-2 font-semibold text-xs tabular flex items-center justify-center active:scale-95"
+                  className="min-h-[44px] min-w-[44px] px-2.5 py-1 rounded-lg border border-line bg-panel-2 font-semibold text-xs tabular flex items-center justify-center active:scale-95"
                   onClick={() => void fixTime(m)}
                 >
                   {t("time.minus", { n: m })}
@@ -157,10 +185,10 @@ export function BoardingButtons({
           </div>
         </div>
       )}
-      {status.kind === "queued" && <p className="mt-2 text-sm text-warn">{t("queue.saved", { time: clock(status.at) })}</p>}
-      {status.kind === "undone" && <p className="mt-2 text-sm text-muted">{t("entry.undone")}</p>}
-      {status.kind === "limit" && <p className="mt-2 text-sm text-warn">{t("reading.limit")}</p>}
-      {status.kind === "error" && <p className="mt-2 text-sm text-bad">{t("reading.error")}</p>}
+      {status.kind === "queued" && <p className="mt-2 text-xs text-warn">{t("queue.saved", { time: clock(status.at) })}</p>}
+      {status.kind === "undone" && <p className="mt-2 text-xs text-muted">{t("entry.undone")}</p>}
+      {status.kind === "limit" && <p className="mt-2 text-xs text-warn">{t("reading.limit")}</p>}
+      {status.kind === "error" && <p className="mt-2 text-xs text-bad">{t("reading.error")}</p>}
     </div>
   );
 }

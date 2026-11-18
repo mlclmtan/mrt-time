@@ -102,6 +102,21 @@ export function isPinned(state: StationUsageState, slug: string): boolean {
   return Boolean(state?.pins?.includes(slug));
 }
 
+/** Pure: returns true if there is any station usage history (pins or recorded uses). */
+export function hasStationUsage(usage: StationUsageState | null | undefined): boolean {
+  if (!usage) return false;
+  if (Array.isArray(usage.pins) && usage.pins.length > 0) return true;
+  if (usage.stations && typeof usage.stations === "object") {
+    return Object.values(usage.stations).some((r) => Boolean(r && (r.count > 0 || r.lastUsed > 0)));
+  }
+  return false;
+}
+
+/** Pure: determines the initial active tab for the stations list based on usage history. */
+export function defaultStationTab(usage: StationUsageState | null | undefined): "frequent" | "line" {
+  return hasStationUsage(usage) ? "frequent" : "line";
+}
+
 /**
  * Pure: calculates frequency score with 30-day half-life recency decay.
  * If individual use timestamps exist, each use decays by 0.5^(age / 30d).

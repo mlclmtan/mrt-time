@@ -39,6 +39,16 @@ describe("StationsList component", () => {
     expect(matches!.length).toBeGreaterThanOrEqual(4);
   });
 
+  it("defaults to 'By line' tab with collapsed details when there is no usage history", () => {
+    const html = renderStationsList();
+    // By line segment has aria-selected="true"
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>By line<\/button>/);
+    // Frequent segment is NOT selected
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="false"[^>]*>Frequent<\/button>/);
+    // <details> tags do not have open attribute
+    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+  });
+
   it("renders empty state for My stations when no usage yet", () => {
     const html = renderStationsList();
     expect(html).toContain("Stations you open show up here");
