@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
-import { EVENT_NAMES, EVENT_SCHEMAS, cleanReferrer, cleanRoute, envelopeSchema, validateEvent } from "./events";
+import { EVENT_NAMES, EVENT_SCHEMAS, cleanReferrer, cleanRoute, envelopeSchema, isFirstPartyOnly, validateEvent } from "./events";
 import { consentModeSignals, parseConsent, serializeConsent } from "./consent";
 import { cleanIds, thirdPartyScripts } from "./scripts";
 import { vercelInsights, vercelSafeUrl } from "./vercel";
@@ -33,16 +33,22 @@ describe("event taxonomy", () => {
         "boarded_logged", "alighted_logged", "timeline_edit", "stats_view", "geo_suggest_shown", "geo_suggest_accepted",
         // revamp gap: "refresh" from the draft spec
         "refresh",
+        // v3 health telemetry (first-party only)
+        "client_error", "unclean_exit", "long_tasks", "tap_queue",
+        // v3 UX telemetry
+        "trip_tap", "tap_correction", "tap_undo", "tab_nav", "station_pin", "station_sort",
       ].sort(),
     );
   });
 
-  it("every event is in the GTM trigger regex and the catalogue in the docs", () => {
+  it("every event is in the GTM trigger regex (or first-party only) and the catalogue in the docs", () => {
     const setup = readFileSync(join(process.cwd(), "docs/ga4-setup.md"), "utf8");
     const regex = /^\^\((.+)\)\$$/m.exec(setup)?.[1].split("|") ?? [];
     const catalogue = readFileSync(join(process.cwd(), "docs/analytics.md"), "utf8");
     for (const name of EVENT_NAMES) {
-      expect(regex, `${name} missing from the GTM trigger regex`).toContain(name);
+      if (!isFirstPartyOnly(name)) {
+        expect(regex, `${name} missing from the GTM trigger regex`).toContain(name);
+      }
       expect(catalogue, `${name} missing from docs/analytics.md`).toContain(`\`${name}\``);
     }
   });

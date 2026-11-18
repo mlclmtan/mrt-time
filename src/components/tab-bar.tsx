@@ -5,6 +5,8 @@ import { TrainFront, MapPin, CirclePlus, Route, User, Ellipsis, type LucideIcon 
 import { isActiveTab } from "./nav-tabs";
 import { splitLocale, type DictKey } from "@/lib/i18n";
 import { useI18n } from "./i18n";
+import { useAnalytics } from "./analytics/analytics-provider";
+import { addBreadcrumb } from "@/lib/analytics/health";
 import type { Role } from "@/lib/auth/access";
 
 export type TabItem = {
@@ -55,8 +57,10 @@ export function getActiveTabIndex(
 export function TabBar({ role }: { role?: Role | string | null }) {
   const pathname = usePathname() || "/";
   const { t, href } = useI18n();
+  const { track } = useAnalytics();
   const tabs = getTabBarTabs(role, t);
   const activeIndex = getActiveTabIndex(tabs, pathname);
+  const currentTab = activeIndex >= 0 ? tabs[activeIndex]?.key : "other";
 
   return (
     <nav
@@ -87,6 +91,12 @@ export function TabBar({ role }: { role?: Role | string | null }) {
               key={tab.key}
               href={href(tab.href)}
               aria-current={isActive ? "page" : undefined}
+              onClick={() => {
+                if (currentTab !== tab.key) {
+                  track("tab_nav", { from: currentTab, to: tab.key });
+                  addBreadcrumb(`tab:${tab.key}`);
+                }
+              }}
               className="relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-start pt-1.5 pb-1 text-center"
             >
               <div className="flex h-7 w-12 items-center justify-center">

@@ -142,7 +142,8 @@ export function apiLatencyQuery(r: Range) {
     select route,
            percentile_cont(0.5) within group (order by ms)::float as p50,
            percentile_cont(0.95) within group (order by ms)::float as p95,
-           count(*)::int as n
+           count(*)::int as n,
+           count(*) filter (where status >= 500)::int as err5xx
     from api_metric where ${inRange(r)} group by 1 order by 1`;
 }
 

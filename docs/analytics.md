@@ -106,6 +106,16 @@ All props are enums, bounded numbers/booleans or slug-like tokens (`slug` = `^[a
 | `ad_viewable` | same as `ad_impression` | The house ad was ≥ 50 % visible for ≥ 1 s (IntersectionObserver) |
 | `ad_click` | same as `ad_impression` | Tap on a house ad (opens `/api/ads/click`, which logs and 302s with UTM) |
 | `web_vital` | `metric` (`LCP\|INP\|CLS\|TTFB\|FCP`), `value` (0–600000), `rating` (`good\|needs-improvement\|poor`) | `web-vitals` callbacks for LCP, INP, CLS, TTFB. FCP is allowed by the schema but not reported. |
+| `client_error` | `kind` (`error\|rejection\|boundary`), `msg` (≤200 chars, scrubbed), `file?` (basename), `line?`, `col?`, `route` | **First-party only.** Window errors/unhandled rejections and error boundary catches (`health.ts`, `error.tsx`, `global-error.tsx`). |
+| `unclean_exit` | `breadcrumbs` (array of max 20 tokens), `visible` (bool) | **First-party only.** Sent on page load if previous session did not cleanly exit via `pagehide` while visible (`health.ts`). |
+| `long_tasks` | `count` (int), `max_ms` (float), `route` | **First-party only.** Main-thread jank observed via PerformanceObserver on hide/unload (`health.ts`). |
+| `tap_queue` | `action` (`queued\|flushed\|failed\|dropped`), `count` (int), `oldest_age_s` (float) | **First-party only.** Offline tap queue operations (`tap-queue.tsx`). |
+| `trip_tap` | `step` (`at_platform\|boarded\|alighted\|arrived`), `journey_type` (`owner_saved\|public`), `ms_since_view` (int) | Trip screen primary button tap (`trip-screen.tsx`). |
+| `tap_correction` | `minutes` (-1 \| -2 \| -5) | Toast "Wrong time?" minute correction on Trip screen, station board, or owner home. |
+| `tap_undo` | — | Toast "Undo" tap on Trip screen, station board, or owner home. |
+| `tab_nav` | `from`, `to` (tab keys) | Bottom tab bar navigation (`tab-bar.tsx`). |
+| `station_pin` | `action` (`pin\|unpin`), `station?` (slug — **owner only**; dropped for visitors) | Station pin toggle on `/stations` list (`stations-list.tsx`). |
+| `station_sort` | `mode` (`frequent\|near\|az\|line`) | Segmented sort control on `/stations` list (`stations-list.tsx`). |
 
 Note the `station` prop holds a **slug** (`outram-park`) on `page_view`/`station_view`/`planner_query` and a **platform code** (`TE17`) on board events. Filter by event name when reporting on the GA4 `station` dimension.
 
@@ -214,6 +224,58 @@ All in `src/lib/analytics/aggregates.ts`. Days and weeks are **Singapore** calen
 - `mrt_bucket` (random UUID, httpOnly) is set by the proxy and forwarded as `x-mrt-bucket`. Variant = FNV-1a 32-bit hash of `"<experiment_key>:<seed>"` mapped onto cumulative weights, so assignment is sticky per browser and independent per experiment.
 - Active experiments come from the `experiment` table (cached 60 s) or, if empty, `DEFAULT_EXPERIMENTS`: `landing_hero` with `control` (50, "See live boards" → `/#stations`) and `countdown` (50, "Plan my trip" → `/plan`).
 - Manage in `/admin/experiments` (variants as `key:weight, key:weight`).
+
+## App Health, Symptoms & Hermes Telemetry
+
+Health events (`client_error`, `unclean_exit`, `long_tasks`, `tap_queue`) are **first-party only** and never sent to GA4, Meta, or Clarity. When analytics consent is not granted, health events are still safely ingested in the aggregate-only way (`aggregate_only=true`, `device_id=null`, `session_id=null`).
+
+### Symptom Rules Table
+
+The rules engine (`src/lib/analytics/symptoms.ts`) analyzes 7-day health and UX telemetry to detect app failures and user friction:
+
+| # | Rule / Trigger | Severity | Threshold | Title | Next Step |
+|---|---|---|---|---|---|
+| 1 | `client_error` group (msg+file+line) ≥ 3 | Medium | `clientErrorGroupMin: 3` | Repeated client error | Inspect error stack and fix client exception |
+| 2 | `unclean_exit` while visible ≥ 2 | High | `uncleanExitsVisibleMin: 2` | Repeated unclean app exits | Inspect freeze/crash breadcrumbs to identify crash points |
+| 3 | `tap_queue` failed or dropped ≥ 1 | High | `tapQueueFailedOrDroppedMin: 1` | Offline tap queue failure or drop | Check endpoint availability and offline queue status |
+| 4 | API route p95 > 2 s or 5xx > 5 % | Medium / High | `apiLatencyP95Ms: 2000`, `api5xxPct: 0.05` | API latency high / API 5xx rate high | Profile DB queries or inspect server 5xx logs |
+| 5 | Web vitals p75 LCP > 2500 ms, INP > 200 ms, CLS > 0.1 | Medium | `lcpP75Ms: 2500`, `inpP75Ms: 200`, `clsP75: 0.1` | High LCP / INP / CLS | Optimize asset load, main-thread work, layout sizing |
+| 6 | `long_tasks` max > 1000 ms | Medium | `longTaskMaxMs: 1000` | Main-thread jank (> 1000 ms) | Split long sync tasks |
+| 7 | `tap_correction` / `trip_tap` > 30 % (≥ 10 taps) | Medium | `tapCorrectionRatio: 0.3`, `minTaps: 10` | Tap time often wrong | Refine Trip screen timing cues |
+| 8 | `tap_undo` / `trip_tap` > 15 % | Medium | `tapUndoRatio: 0.15` | Frequent tap undos | Inspect button placement and target sizing |
+| 9 | Median `trip_tap` per trip day > 6 | Low | `tripTapPerDayMedianMax: 6` | Trip still takes many taps | Streamline multi-leg progression |
+
+### Hermes Symptoms API
+
+Hermes (the AI orchestrator) queries the symptoms report via HTTP:
+
+```http
+GET /api/admin/symptoms?since=7d HTTP/1.1
+Authorization: Bearer <INGEST_TOKEN>
+```
+
+- **Auth**: Either an active owner/analyst session cookie OR `Authorization: Bearer <INGEST_TOKEN>`.
+- **Query params**: `since=7d` (supports `24h`, `7d`, `30d`; defaults to `7d`).
+- **Response**: `Cache-Control: no-store` JSON:
+  ```json
+  {
+    "window": { "from": "2026-11-11T00:00:00.000Z", "to": "2026-11-18T00:00:00.000Z" },
+    "findings": [
+      {
+        "id": "client_error_repeated",
+        "severity": "medium",
+        "title": "Repeated client error",
+        "evidence": "\"TypeError\" at page.js:12 occurred 4 times",
+        "next_step": "Investigate client stack trace and fix error at page.js:12."
+      }
+    ],
+    "counts": {
+      "client_error": 4,
+      "unclean_exit": 0,
+      "tap_queue_failures": 0
+    }
+  }
+  ```
 
 ## Adding an event
 

@@ -53,6 +53,28 @@ describe("offline tap queue (F11)", () => {
     expect(res).toEqual({ kind: "queued" });
     expect(queue).toHaveBeenCalledWith("/api/sightings", post);
   });
+
+  it("emits tap_queue telemetry for flushed, dropped and failed items", async () => {
+    const store = memory();
+    enqueueTap(store, { url: "/api/sightings", body: { a: 1 } }, now);
+    enqueueTap(store, { url: "/api/sightings", body: { a: 2 } }, now);
+    enqueueTap(store, { url: "/api/sightings", body: { a: 3 } }, now - 13 * 60 * MINUTE);
+
+    const events: Array<{ action: string; count: number; oldest_age_s: number }> = [];
+    const onEvent = (evt: { action: "flushed" | "failed" | "dropped"; count: number; oldest_age_s: number }) =>
+      events.push(evt);
+
+    const statuses = [200, 500];
+    const fetch = vi.fn(async () => new Response("{}", { status: statuses.shift()! }));
+
+    await flushTaps(store, fetch, now, onEvent);
+
+    expect(events).toEqual([
+      { action: "dropped", count: 1, oldest_age_s: expect.any(Number) },
+      { action: "flushed", count: 1, oldest_age_s: expect.any(Number) },
+      { action: "failed", count: 1, oldest_age_s: expect.any(Number) },
+    ]);
+  });
 });
 
 describe("time chips (F10) and the public 30-min limit (F7)", () => {

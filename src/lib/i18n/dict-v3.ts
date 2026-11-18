@@ -76,6 +76,12 @@ export const v3En = {
   "stations.action.pin": "Pin station",
   "stations.action.unpin": "Unpin station",
   "stations.nextTrain": "Next train",
+
+  // Error boundary strings
+  "error.title": "Something went wrong",
+  "error.description": "An unexpected error occurred. You can retry or head back to Home.",
+  "error.retry": "Try again",
+  "error.home": "Go to Home",
 } as const;
 
 export const v3Zh: Record<keyof typeof v3En, string> = {
@@ -152,4 +158,10 @@ export const v3Zh: Record<keyof typeof v3En, string> = {
   "stations.action.pin": "釘選車站",
   "stations.action.unpin": "取消釘選車站",
   "stations.nextTrain": "下一班車",
+
+  // Error boundary strings
+  "error.title": "出了點問題",
+  "error.description": "發生非預期的錯誤。你可以重試或返回首頁。",
+  "error.retry": "再試一次",
+  "error.home": "回首頁",
 };

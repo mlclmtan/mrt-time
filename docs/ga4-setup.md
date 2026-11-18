@@ -56,7 +56,7 @@ Built-in variable `Event` must be enabled (it is by default).
 2. **New** → **Custom Event**, name `MRT events`, event name (tick **Use regex matching**):
 
 ```
-^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital|ad_impression|ad_viewable|ad_click|boarded_logged|alighted_logged|timeline_edit|stats_view|geo_suggest_shown|geo_suggest_accepted|refresh)$
+^(page_view|station_view|journey_view|planner_query|prediction_view|prediction_feedback|log_reading|log_trip_event|submit_reading|install_prompt_shown|app_installed|standalone_open|share|outbound_click|alert_view|crowd_view|feedback_submit|nps_submit|newsletter_signup|experiment_exposure|kol_landing|campaign_landing|consent_update|web_vital|ad_impression|ad_viewable|ad_click|boarded_logged|alighted_logged|timeline_edit|stats_view|geo_suggest_shown|geo_suggest_accepted|refresh|trip_tap|tap_correction|tap_undo|tab_nav|station_pin|station_sort)$
 ```
 
 Update this list when you add an event.

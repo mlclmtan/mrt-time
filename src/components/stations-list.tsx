@@ -118,10 +118,16 @@ export function StationsList() {
     };
   }, []);
 
-  const togglePinState = useCallback((slug: string) => {
-    const next = toggleStationPin(slug);
-    setUsage(next);
-  }, []);
+  const togglePinState = useCallback(
+    (slug: string) => {
+      const isPinned = (usage.pins || []).includes(slug);
+      const action = isPinned ? ("unpin" as const) : ("pin" as const);
+      track("station_pin", { action, station: slug });
+      const next = toggleStationPin(slug);
+      setUsage(next);
+    },
+    [usage.pins, track],
+  );
 
   const pinnedSlugs = useMemo(() => usage.pins || [], [usage.pins]);
   const frequentSlugs = useMemo(() => rankFrequent(usage), [usage]);
@@ -262,6 +268,9 @@ export function StationsList() {
                     active ? "bg-panel-2 font-semibold text-ink shadow-sm" : "text-muted hover:text-ink"
                   }`}
                   onClick={() => {
+                    if (tab !== key) {
+                      track("station_sort", { mode: key });
+                    }
                     setTab(key);
                     if (key === "near" && geo.state !== "ok") {
                       geo.allow();

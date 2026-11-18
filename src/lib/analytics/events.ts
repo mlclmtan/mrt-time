@@ -147,7 +147,69 @@ export const EVENT_SCHEMAS = {
     value: z.number().min(0).max(600_000),
     rating: z.enum(["good", "needs-improvement", "poor"]),
   }),
+  // Health telemetry (first-party only)
+  client_error: z.strictObject({
+    kind: z.enum(["error", "rejection", "boundary"]),
+    msg: z
+      .string()
+      .max(200)
+      .refine((v) => !/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(v), "no email")
+      .refine((v) => !/\?[a-zA-Z0-9_=&%+-]+/.test(v), "no query")
+      .refine((v) => !/\d{4,}/.test(v), "no 4+ digit runs"),
+    file: z.string().regex(/^[a-zA-Z0-9_.-]{1,100}$/).optional(),
+    line: z.number().int().min(0).max(1_000_000).optional(),
+    col: z.number().int().min(0).max(1_000_000).optional(),
+    route: z.string().regex(/^[a-zA-Z0-9/_.-]{1,200}$/),
+  }),
+  unclean_exit: z.strictObject({
+    breadcrumbs: z.array(z.string().regex(/^[a-zA-Z0-9_:/-]{1,60}$/)).max(20),
+    visible: z.boolean(),
+  }),
+  long_tasks: z.strictObject({
+    count: z.number().int().min(1).max(100_000),
+    max_ms: z.number().min(0).max(600_000),
+    route: z.string().regex(/^[a-zA-Z0-9/_.-]{1,200}$/),
+  }),
+  tap_queue: z.strictObject({
+    action: z.enum(["queued", "flushed", "failed", "dropped"]),
+    count: z.number().int().min(0).max(10_000),
+    oldest_age_s: z.number().min(0).max(86_400 * 30),
+  }),
+  // v3 UX telemetry
+  trip_tap: z.strictObject({
+    step: z.enum(["at_platform", "boarded", "alighted", "arrived"]),
+    journey_type: z.enum(["owner_saved", "public"]),
+    ms_since_view: z.number().int().min(0).max(86_400_000),
+  }),
+  tap_correction: z.strictObject({
+    minutes: z.union([z.literal(-1), z.literal(-2), z.literal(-5)]),
+  }),
+  tap_undo: z.strictObject({}),
+  tab_nav: z.strictObject({
+    from: z.string().regex(/^[a-z0-9_-]{1,40}$/),
+    to: z.string().regex(/^[a-z0-9_-]{1,40}$/),
+  }),
+  station_pin: z.strictObject({
+    action: z.enum(["pin", "unpin"]),
+    station: slug.optional(),
+  }),
+  station_sort: z.strictObject({
+    mode: z.string().regex(/^[a-z0-9_-]{1,40}$/),
+  }),
 } as const;
+
+export const FIRST_PARTY_ONLY_EVENTS = [
+  "client_error",
+  "unclean_exit",
+  "long_tasks",
+  "tap_queue",
+] as const;
+
+export type FirstPartyOnlyEventName = (typeof FIRST_PARTY_ONLY_EVENTS)[number];
+
+export function isFirstPartyOnly(name: string): name is FirstPartyOnlyEventName {
+  return (FIRST_PARTY_ONLY_EVENTS as readonly string[]).includes(name);
+}
 
 export type EventName = keyof typeof EVENT_SCHEMAS;
 export type EventProps<N extends EventName> = z.infer<(typeof EVENT_SCHEMAS)[N]>;

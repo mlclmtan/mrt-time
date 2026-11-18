@@ -38,22 +38,62 @@ export function enqueueTap(storage: Storage, tap: Omit<QueuedTap, "id" | "queued
 }
 
 /** Send queued taps oldest first. Returns how many were delivered (or rejected for good). */
-export async function flushTaps(storage: Storage, doFetch: FetchLike, now = Date.now()): Promise<{ sent: number; left: number }> {
-  const items = read(storage).filter((t) => now - t.queuedAt <= MAX_AGE_MS);
+export async function flushTaps(
+  storage: Storage,
+  doFetch: FetchLike,
+  now = Date.now(),
+  onEvent?: (event: { action: "flushed" | "failed" | "dropped"; count: number; oldest_age_s: number }) => void,
+): Promise<{ sent: number; left: number }> {
+  const all = read(storage);
+  const oldest = all[0];
+  const oldestAgeS = oldest ? Math.max(0, Math.round((now - oldest.queuedAt) / 1000)) : 0;
+
+  const items = all.filter((t) => now - t.queuedAt <= MAX_AGE_MS);
+  const expiredCount = all.length - items.length;
+  if (expiredCount > 0 && onEvent) {
+    onEvent({ action: "dropped", count: expiredCount, oldest_age_s: oldestAgeS });
+  }
+
   const left: QueuedTap[] = [];
   let sent = 0;
+  let delivered = 0;
+  let dropped = 0;
+  let failed = 0;
+
   for (const [i, tap] of items.entries()) {
     try {
-      const res = await doFetch(tap.url, { method: "POST", headers: { "content-type": "application/json", ...tap.headers }, body: JSON.stringify(tap.body) });
+      const res = await doFetch(tap.url, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...tap.headers },
+        body: JSON.stringify(tap.body),
+      });
       // 5xx: try again later; anything else (ok, or a 4xx that will never pass) is done.
-      if (res.status >= 500) left.push(tap);
-      else sent++;
+      if (res.status >= 500) {
+        failed++;
+        left.push(tap);
+      } else if (res.status >= 400) {
+        dropped++;
+        sent++;
+      } else {
+        delivered++;
+        sent++;
+      }
     } catch {
       // Still offline: keep this one and everything after it, in order.
-      left.push(...items.slice(i));
+      const remaining = items.slice(i);
+      failed += remaining.length;
+      left.push(...remaining);
       break;
     }
   }
+
   write(storage, left);
+
+  if (onEvent) {
+    if (delivered > 0) onEvent({ action: "flushed", count: delivered, oldest_age_s: oldestAgeS });
+    if (dropped > 0) onEvent({ action: "dropped", count: dropped, oldest_age_s: oldestAgeS });
+    if (failed > 0) onEvent({ action: "failed", count: failed, oldest_age_s: oldestAgeS });
+  }
+
   return { sent, left: left.length };
 }

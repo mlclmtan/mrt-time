@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { onCLS, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
-import { validateEvent, type EventName, type EventProps } from "@/lib/analytics/events";
+import { isFirstPartyOnly, validateEvent, type EventName, type EventProps } from "@/lib/analytics/events";
 import { consentModeSignals, type Consent } from "@/lib/analytics/consent";
 import { GA4_DIMENSIONS, ga4Params, metaEventFor, privacyProps, type UserType } from "@/lib/analytics/mapping";
 import { tagIdsFromEnv } from "@/lib/analytics/scripts";
@@ -24,6 +24,7 @@ import {
 } from "@/lib/analytics/client";
 import { ThirdPartyScripts } from "./third-party-scripts";
 import { VercelInsights } from "./vercel-insights";
+import { HealthMonitor } from "./health-monitor";
 
 type Track = <N extends EventName>(name: N, props: EventProps<N>) => void;
 type Ctx = {
@@ -75,8 +76,9 @@ export function AnalyticsProvider({
       // Visitors: no station on boarded / got off / GPS events (never station + device together).
       const checked = validateEvent(name, privacyProps(name, props as Record<string, unknown>, userType) as EventProps<typeof name>);
       if (!checked.ok) return;
+      const isHealth = isFirstPartyOnly(name);
       const any = c.analytics || c.marketing;
-      if (!any) return; // the proxy counts anonymous page hits server-side
+      if (!any && !isHealth) return; // the proxy counts anonymous page hits server-side
       const eventId = randomId();
       const route = `${location.pathname}`;
       const standalone = isStandalone();
@@ -99,6 +101,8 @@ export function AnalyticsProvider({
         fbp: cookieValue("_fbp"),
         fbc: cookieValue("_fbc"),
       });
+      // First-party only health events are NEVER sent to GA4 or Meta.
+      if (isHealth) return;
       const w = window as W;
       const params = ga4Params(name, checked.props, { language: locale, standalone, userType, experiments, kolHandle, campaign: utm.current?.campaign });
       if (c.analytics || c.marketing) {
@@ -170,6 +174,7 @@ export function AnalyticsProvider({
   const internal = userType !== "visitor";
   return (
     <AnalyticsContext.Provider value={value}>
+      <HealthMonitor />
       {children}
       {consent.decided && <ThirdPartyScripts consent={consent} ids={IDS} internal={internal} />}
       {consent.decided && (

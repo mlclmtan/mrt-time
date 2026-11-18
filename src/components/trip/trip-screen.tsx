@@ -22,6 +22,7 @@ import { randomId } from "@/lib/analytics/client";
 import { UNDO_MS } from "@/lib/sightings/client";
 import { localePath } from "@/lib/i18n";
 import { useAnalytics } from "../analytics/analytics-provider";
+import { addBreadcrumb } from "@/lib/analytics/health";
 import { useI18n } from "../i18n";
 import { QuickEntry } from "../board/quick-entry";
 import { useTapQueue } from "../boarding/tap-queue";
@@ -82,7 +83,12 @@ export function TripScreen({
   today,
 }: TripScreenProps) {
   const { t, locale } = useI18n();
-  const { track } = useAnalytics();
+  const { track, userType } = useAnalytics();
+  const viewMountedAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (viewMountedAt.current == null) viewMountedAt.current = nowMs();
+  }, []);
 
   const [key, setKey] = useState(initialKey ?? journeys[0]?.key ?? "");
   const manual = useRef<JourneyChoice | null>(initialChoice);
@@ -292,6 +298,7 @@ export function TripScreen({
 
   // Undo
   async function handleUndo(clientIdToUndo?: string) {
+    track("tap_undo", {});
     const id = clientIdToUndo ?? toast?.clientId;
     if (!id) return;
     setToast(null);
@@ -303,6 +310,7 @@ export function TripScreen({
 
   // Adjust time by -1, -2, -5 minutes
   async function handleFixTime(minutes: number, targetEventId?: number | null) {
+    track("tap_correction", { minutes: (-minutes) as -1 | -2 | -5 });
     const id = targetEventId ?? toast?.id;
     const currentAt = toast?.at ?? (mine.length ? mine[mine.length - 1].at : now);
     const newAt = currentAt - minutes * MINUTE;
@@ -866,7 +874,22 @@ export function TripScreen({
         {/* ONE FULL-WIDTH PRIMARY BUTTON ≥ 72px */}
         <button
           type="button"
-          onClick={() => void logTap(primaryAction.kind)}
+          onClick={() => {
+            const kind = primaryAction.kind;
+            const step: "at_platform" | "boarded" | "alighted" | "arrived" =
+              kind === "board"
+                ? "boarded"
+                : kind === "alight"
+                  ? "alighted"
+                  : kind === "at_platform"
+                    ? "at_platform"
+                    : "arrived";
+            const journey_type: "owner_saved" | "public" = userType === "owner" ? "owner_saved" : "public";
+            const ms_since_view = Math.max(0, viewMountedAt.current != null ? now - viewMountedAt.current : 0);
+            track("trip_tap", { step, journey_type, ms_since_view });
+            addBreadcrumb(`tap:${step}`);
+            void logTap(kind);
+          }}
           className="btn btn-primary w-full h-[72px] min-h-[72px] text-xl font-bold rounded-2xl shadow-lg ring-4 ring-led/30 flex items-center justify-center gap-3 cursor-pointer"
         >
           <Check size={26} strokeWidth={3} className="shrink-0" />

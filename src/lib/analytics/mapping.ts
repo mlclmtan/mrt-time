@@ -1,5 +1,5 @@
 /** Map first-party events to GA4 params (custom dimensions) and Meta events. */
-import type { EventName } from "./events";
+import { isFirstPartyOnly, type EventName } from "./events";
 
 export type UserType = "owner" | "analyst" | "visitor";
 export type EventContext = {
@@ -33,6 +33,7 @@ export const GA4_DIMENSIONS = [
 ] as const;
 
 export function ga4Params(name: EventName, props: Record<string, unknown>, ctx: EventContext) {
+  if (isFirstPartyOnly(name)) return {};
   const params: Record<string, string | number | boolean> = {};
   for (const [k, v] of Object.entries(props))
     if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") params[k] = v;
@@ -56,7 +57,7 @@ export function ga4Params(name: EventName, props: Record<string, unknown>, ctx: 
  * carry the station together with a device id: the station is dropped
  * (line / direction / surface stay). They are never sent to Meta.
  */
-export const LOCATION_EVENTS = ["boarded_logged", "alighted_logged", "geo_suggest_shown", "geo_suggest_accepted"] as const satisfies readonly EventName[];
+export const LOCATION_EVENTS = ["boarded_logged", "alighted_logged", "geo_suggest_shown", "geo_suggest_accepted", "station_pin"] as const satisfies readonly EventName[];
 const isLocationEvent = (name: string) => (LOCATION_EVENTS as readonly string[]).includes(name);
 
 /** Props safe to send for this user: visitors' location events lose `station`. */
@@ -71,7 +72,7 @@ export type MetaEvent = { event: string; custom: boolean; data: Record<string, u
 
 /** Pixel/CAPI events: PageView, ViewContent, Lead, CompleteRegistration, PlanJourney. */
 export function metaEventFor(name: EventName, props: Record<string, unknown>): MetaEvent | null {
-  if (isLocationEvent(name)) return null; // never to ad platforms
+  if (isLocationEvent(name) || isFirstPartyOnly(name)) return null; // never to ad platforms
   switch (name) {
     case "page_view":
       return { event: "PageView", custom: false, data: {} };

@@ -262,6 +262,7 @@ export function OwnerHome({
   }
 
   async function undo() {
+    track("tap_undo", {});
     if (!toast) return;
     const id = toast.clientId;
     setToast(null);
@@ -272,6 +273,7 @@ export function OwnerHome({
 
   /** "Wrong time?": move the tap back (the timeline edit; an edited boarding isn't scored). */
   async function fixTime(minutes: number) {
+    track("tap_correction", { minutes: (-minutes) as -1 | -2 | -5 });
     if (!toast?.id) return;
     const at = toast.at - minutes * MINUTE;
     setToast({ ...toast, at, text: formatToastSeconds(toast.kind, at, t) });

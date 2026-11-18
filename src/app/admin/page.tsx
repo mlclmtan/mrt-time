@@ -4,6 +4,7 @@ import { dbConfigured, getDb } from "@/lib/db";
 import { observation, sandboxRun } from "@/lib/db/schema";
 import * as q from "@/lib/analytics/aggregates";
 import { parseRange } from "@/lib/server/admin";
+import { getSymptomsReport } from "@/lib/analytics/symptoms";
 import { RangeForm } from "@/components/admin/range-form";
 import { BarList, Card, CohortTable, DataTable, FunnelBars, Heatmap, LineChart, StatCard } from "@/components/admin/charts";
 
@@ -18,7 +19,7 @@ export default async function AdminOverview({ searchParams }: { searchParams: Pr
   const run = <R,>(query: ReturnType<typeof q.dauQuery>) => q.runRows<R>(db, query).catch(() => [] as R[]);
   const csv = (table: string) => `/api/admin/export?table=${table}&from=${range.fromDate}&to=${range.toDate}`;
 
-  const [active, nvr, sessions, dau, pages, stations, journeys, referrers, utm, geo, devices, heat, retention, funnel, vitals, latency, accuracy, campaigns, kols, feedback, queue, sandbox] =
+  const [active, nvr, sessions, dau, pages, stations, journeys, referrers, utm, geo, devices, heat, retention, funnel, vitals, latency, accuracy, campaigns, kols, feedback, queue, sandbox, health] =
     await Promise.all([
       run<{ dau: number; wau: number; mau: number }>(q.activeUsersQuery(range.to)),
       run<{ new_users: number; returning_users: number }>(q.newVsReturningQuery(range)),
@@ -35,13 +36,21 @@ export default async function AdminOverview({ searchParams }: { searchParams: Pr
       run<{ cohort: string; week_offset: number; users: number }>(q.retentionQuery(range)),
       run<{ landing: number; prediction_view: number; planner_query: number; install: number }>(q.funnelQuery(range)),
       run<{ metric: string; p75: number; n: number }>(q.webVitalsQuery(range)),
-      run<{ route: string; p50: number; p95: number; n: number }>(q.apiLatencyQuery(range)),
+      run<{ route: string; p50: number; p95: number; n: number; err5xx?: number }>(q.apiLatencyQuery(range)),
       run<{ key: string; scored: number; hits: number }>(q.accuracyQuery(range, "line")),
       run<Record<string, unknown>>(q.campaignPerformanceQuery(range)),
       run<Record<string, unknown>>(q.kolFunnelQuery(range)),
       run<{ feedback_count: number; avg_rating: number | null; nps_count: number; nps: number | null }>(q.feedbackSummaryQuery(range)),
       db.select().from(observation).where(eq(observation.status, "pending")).orderBy(desc(observation.createdAt)).limit(10).catch(() => []),
       db.select().from(sandboxRun).orderBy(desc(sandboxRun.ranAt)).limit(7).catch(() => []),
+      getSymptomsReport(db, {
+        from: new Date(range.to.getTime() - 7 * 24 * 3600 * 1000),
+        to: range.to,
+      }).catch(() => ({
+        window: { from: "", to: "" },
+        findings: [],
+        counts: { client_error: 0, unclean_exit: 0, tap_queue_failures: 0 },
+      })),
     ]);
   const a = active[0] ?? { dau: 0, wau: 0, mau: 0 };
   const s = sessions[0] ?? { sessions: 0, avg_engaged_sec: 0, page_views: 0, anonymous_page_views: 0 };
@@ -52,6 +61,50 @@ export default async function AdminOverview({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-4">
       <RangeForm t={t} from={range.fromDate} to={range.toDate} />
+
+      {/* Health section */}
+      <div className="space-y-3 rounded-2xl border border-line bg-panel p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-ink">Health & Symptoms (7d)</h2>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="chip border border-line bg-panel-2 font-mono">
+              client_error: {health.counts.client_error}
+            </span>
+            <span className="chip border border-line bg-panel-2 font-mono">
+              unclean_exit: {health.counts.unclean_exit}
+            </span>
+            <span className="chip border border-line bg-panel-2 font-mono">
+              tap_queue failures: {health.counts.tap_queue_failures}
+            </span>
+          </div>
+        </div>
+        {health.findings.length === 0 ? (
+          <p className="text-sm text-muted">No active health issues detected in the 7-day window.</p>
+        ) : (
+          <div className="space-y-2">
+            {health.findings.map((f, i) => {
+              const chipColor =
+                f.severity === "high"
+                  ? "bg-bad/15 text-bad border-bad/30"
+                  : f.severity === "medium"
+                    ? "bg-warn/15 text-warn border-warn/30"
+                    : "bg-accent/15 text-accent border-accent/30";
+              return (
+                <div key={i} className="flex flex-col gap-1 rounded-xl border border-line/60 bg-panel-2 p-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className={`chip border px-2 py-0.5 text-xs font-bold uppercase tracking-wider ${chipColor}`}>
+                      {f.severity}
+                    </span>
+                    <span className="font-semibold text-ink">{f.title}</span>
+                  </div>
+                  <p className="text-xs text-muted font-mono">{f.evidence}</p>
+                  <p className="text-xs text-muted">Next step: {f.next_step}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <StatCard label={t("admin.dau")} value={a.dau} />
         <StatCard label={t("admin.wau")} value={a.wau} />

@@ -15,6 +15,7 @@ import type { LineCode } from "@/lib/network";
 import { clock, clockSeconds } from "@/lib/format";
 import { MINUTE, nowMs } from "@/lib/time";
 import { useAnalytics } from "../analytics/analytics-provider";
+import { addBreadcrumb } from "@/lib/analytics/health";
 import { useI18n } from "../i18n";
 import { useTapQueue } from "./tap-queue";
 
@@ -82,12 +83,14 @@ export function BoardingButtons({
   }
 
   async function log(kind: SightingKindInput) {
+    addBreadcrumb(`tap:${kind}`);
     const tapped = nowMs();
     await save(kind, tapped, tapped, "now");
   }
 
   async function undo() {
     if (status.kind !== "saved") return;
+    track("tap_undo", {});
     const ref = { id: status.id, clientId: status.clientId };
     setStatus({ kind: "undone" });
     await undoSighting(ref, { deviceId: deviceId() });
@@ -97,6 +100,7 @@ export function BoardingButtons({
   /** "Wrong time?": take the tap back and save it again a few minutes earlier. */
   async function fixTime(minutes: number) {
     if (status.kind !== "saved") return;
+    track("tap_correction", { minutes: (-minutes) as -1 | -2 | -5 });
     const { what, at, id, clientId } = status;
     setStatus({ kind: "busy" });
     await undoSighting({ id, clientId }, { deviceId: deviceId() });
