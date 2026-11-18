@@ -502,7 +502,7 @@ export function TripScreen({
 
   return (
     <div
-      className="flex flex-col justify-between h-[calc(100dvh-56px-env(safe-area-top)-72px-env(safe-area-inset-bottom))] max-w-lg mx-auto py-2 select-none overflow-hidden"
+      className="flex flex-col justify-between h-[calc(100dvh-56px-env(safe-area-inset-top)-72px-env(safe-area-inset-bottom))] max-w-lg mx-auto py-2 select-none overflow-hidden"
       data-trip-screen
       data-trip-state={progress.state}
     >
