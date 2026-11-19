@@ -59,10 +59,10 @@ export default async function StationPage({ params }: { params: Promise<{ slug: 
           </div>
           <ShareButton path={localePath(locale, `/station/${slug}`)} title={`${name} · MRT Time`} contentType="station" iconOnly />
         </div>
-        <p className="text-[13px] text-muted truncate">
+        <p className="text-[13px] text-muted">
           {t("station.subtitle")}
         </p>
-        <p className="text-xs text-muted truncate">
+        <p className="text-xs text-muted">
           {t("station.lines")}: {[...new Set(station.codes.map((c) => LINES[PLATFORMS[c].line].name[locale]))].join(" · ")}
         </p>
       </header>

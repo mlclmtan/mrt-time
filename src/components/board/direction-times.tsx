@@ -69,14 +69,14 @@ export function DirectionTimes({
 
   return (
     <div className="mt-0.5" data-board-state={view.state}>
-      <div className="flex items-baseline justify-between gap-2 overflow-hidden flex-nowrap">
-        {destination && (
-          <div className="flex items-baseline gap-1.5 min-w-0 truncate py-0.5 shrink">
-            <span className="text-xs text-muted uppercase tracking-wider shrink-0">{t("board.towards")}</span>
-            <span className="font-semibold text-base sm:text-lg text-foreground truncate">{destination}</span>
-          </div>
-        )}
-        <div className="flex items-baseline gap-2.5 sm:gap-4 shrink-0">
+      {destination && (
+        <div className="flex items-baseline gap-1.5 py-0.5">
+          <span className="text-xs text-muted uppercase tracking-wider shrink-0">{t("board.towards")}</span>
+          <span className="font-semibold text-base sm:text-lg text-foreground">{destination}</span>
+        </div>
+      )}
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <div className="flex items-baseline gap-2.5 sm:gap-4">
           {first && (
             <div className="flex items-baseline gap-1.5 shrink-0">
               <span className="text-[11px] font-semibold tracking-wider text-muted uppercase shrink-0">{t("board.next")}</span>
@@ -113,11 +113,11 @@ export function DirectionTimes({
         </div>
       </div>
       {/* Estimate chip + source note collapsed into one line */}
-      <div className="mt-1 flex items-center gap-1.5 text-xs overflow-hidden">
+      <div className="mt-1 flex items-start gap-1.5 text-xs">
         <span className={`shrink-0 chip py-0 px-1.5 text-[11px] font-semibold ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
           {t(est ? "board.estimate" : "board.exact")}
         </span>
-        <span className="text-muted text-xs truncate min-w-0">{boardReasonText(t, view.reason, locale)}</span>
+        <span className="text-muted text-xs min-w-0">{boardReasonText(t, view.reason, locale)}</span>
       </div>
     </div>
   );

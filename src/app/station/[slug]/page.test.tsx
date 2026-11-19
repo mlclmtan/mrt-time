@@ -36,7 +36,7 @@ describe("StationPage (/station/[slug])", () => {
     expect(html).toContain("Outram Park");
     // 13px muted subtitle
     expect(html).toContain("text-[13px] text-muted");
-    expect(html).toContain("Next trains towards each terminal · tap Boarded when you get on");
+    expect(html).toContain("Next trains towards each terminal · tap “I boarded” when you get on");
   });
 
   it("renders the subtitle in Traditional Chinese when in zh-Hant", async () => {

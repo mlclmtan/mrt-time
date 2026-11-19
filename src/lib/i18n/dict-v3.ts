@@ -80,7 +80,7 @@ export const v3En = {
   "stations.nextTrain": "Next train",
 
   // Station page (t8)
-  "station.subtitle": "Next trains towards each terminal · tap Boarded when you get on",
+  "station.subtitle": "Next trains towards each terminal · tap “I boarded” when you get on",
   "station.line.tapToExpand": "{line} · tap to expand",
   "station.line.tapToCollapse": "{line} · tap to collapse",
   "boarding.screenShort": "Screen",
