@@ -51,7 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <AnalyticsProvider locale={locale} userType={userType} experiments={experiments}>
             <PwaRegistration />
             <div className="relative mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden">
-              <SiteHeader />
+              <SiteHeader signedIn={!!session} />
               <AppMain>
                 <div className="flex-1">{children}</div>
                 <SiteFooter />

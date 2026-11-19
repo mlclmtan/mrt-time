@@ -3,6 +3,10 @@
  * `v3Zh` must define every key.
  */
 export const v3En = {
+  "ptr.pull": "Pull to refresh",
+  "ptr.release": "Release to refresh",
+  "ptr.refreshing": "Refreshing…",
+  "stations.allLinks": "All stations",
   "tab.trip": "Trip",
   "tab.stations": "Stations",
   "tab.log": "Log",
@@ -104,6 +108,10 @@ export const v3En = {
 } as const;
 
 export const v3Zh: Record<keyof typeof v3En, string> = {
+  "ptr.pull": "下拉以重新整理",
+  "ptr.release": "放開以重新整理",
+  "ptr.refreshing": "重新整理中…",
+  "stations.allLinks": "所有車站",
   "tab.trip": "行程",
   "tab.stations": "車站",
   "tab.log": "記錄",

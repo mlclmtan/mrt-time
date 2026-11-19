@@ -8,7 +8,7 @@ import { FeedbackLink } from "./voc/feedback-widget";
 
 export { AppMain } from "./app-main";
 
-export async function SiteHeader() {
+export async function SiteHeader({ signedIn = false }: { signedIn?: boolean } = {}) {
   const { locale, t } = await getT();
   const href = (p: string) => localePath(locale, p);
   return (
@@ -19,7 +19,17 @@ export async function SiteHeader() {
           <BrandMark />
           <span>{t("app.name")}</span>
         </Link>
-        <LanguageSwitch />
+        <div className="flex items-center gap-2">
+          {!signedIn && (
+            <Link
+              href={href("/sign-in")}
+              className="inline-flex min-h-[36px] items-center rounded-full bg-led px-3.5 text-sm font-semibold text-[#0f1316] active:scale-95"
+            >
+              {t("nav.signIn")}
+            </Link>
+          )}
+          <LanguageSwitch />
+        </div>
       </div>
     </header>
   );

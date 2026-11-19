@@ -58,6 +58,9 @@ describe("StationPage (/station/[slug])", () => {
   });
 
   it("Outram Park page collapses NE line card by default behind tap-to-expand button", async () => {
+    // Pin the clock inside service hours (10:00 SGT); after 00:30 the board shows "Not running now".
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T02:00:00Z"));
     const pageEl = await StationPage({
       params: Promise.resolve({ slug: "outram-park" }),
     });
@@ -74,5 +77,6 @@ describe("StationPage (/station/[slug])", () => {
     expect(html).toContain("North East Line · tap to expand");
     // "Screen" button label is present
     expect(html).toContain("Screen");
+    vi.useRealTimers();
   });
 });

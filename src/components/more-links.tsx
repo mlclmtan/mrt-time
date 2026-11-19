@@ -20,6 +20,14 @@ export async function MoreSection({ role }: { role: Role | null }) {
 
   return (
     <section className="panel space-y-2 p-4">
+      {!role && (
+        <Link
+          href={href("/sign-in")}
+          className="btn btn-primary flex min-h-[48px] w-full items-center justify-center text-base font-semibold"
+        >
+          {t("nav.signIn")}
+        </Link>
+      )}
       <h2 className="font-semibold">{t("more.title")}</h2>
       <div className="flex flex-col divide-y divide-line text-sm">
         {links.map((link) => (
