@@ -68,19 +68,13 @@ describe("owner Home layout (H2) and next step (F10)", () => {
     expect(html).toContain('data-clarity-mask="True"');
   });
 
-  it("computed layout: the dock sits above the sheet (--consent-h) and the page pads for it", () => {
+  it("computed layout: the dock sits above the bottom bar within the scrolling shell", () => {
     const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
     const dock = /\.next-step-dock\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(dock).toMatch(/bottom:\s*calc\(56px \+ max\(var\(--consent-h, 0px\), env\(safe-area-inset-bottom\)\) \+ 8px\)/);
+    expect(dock).toMatch(/bottom:\s*8px/);
     const body = /\nbody\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(body).toMatch(/padding-bottom:\s*var\(--consent-h, 0px\)/);
-    // 393×852 with a 160 px sheet and 56 px tab bar: a sticky 64 px button (min-h-16) ends 8 px above the sheet's top edge.
-    const viewport = 852;
-    const sheet = 160;
-    const tabBar = 56;
-    const buttonBottom = viewport - tabBar - Math.max(sheet, 34) - 8;
-    expect(buttonBottom).toBeLessThanOrEqual(viewport - sheet);
-    expect(buttonBottom - 64).toBeGreaterThan(0);
+    expect(body).toMatch(/height:\s*100dvh/);
+    expect(body).toMatch(/overflow:\s*hidden/);
   });
 
   it("no floating Feedback button anywhere (v2.1.1); Feedback stays in the footer and Settings", () => {

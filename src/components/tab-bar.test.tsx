@@ -63,7 +63,8 @@ describe("TabBar component rendering", () => {
     expect(html).toContain("Log");
     expect(html).toContain("Plan");
     expect(html).toContain("Me");
-    expect(html).toContain("fixed bottom-0");
+    expect(html).toContain("shrink-0");
+    expect(html).toContain("h-[52px]");
     expect(html).toContain("z-40");
     expect(html).toContain("max-w-5xl");
     expect(html).toContain("bg-panel");

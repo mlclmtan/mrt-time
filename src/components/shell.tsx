@@ -6,11 +6,13 @@ import { UpdateBanner, VersionTag } from "./update-banner";
 import { BrandMark } from "./brand-mark";
 import { FeedbackLink } from "./voc/feedback-widget";
 
+export { AppMain } from "./app-main";
+
 export async function SiteHeader() {
   const { locale, t } = await getT();
   const href = (p: string) => localePath(locale, p);
   return (
-    <header className="safe-top sticky top-0 z-30 -mx-4 border-b border-line bg-bg/90 px-4 backdrop-blur">
+    <header className="safe-top shrink-0 border-b border-line bg-bg px-4">
       <UpdateBanner />
       <div className="flex items-center justify-between gap-3 py-3">
         <Link href={href("/")} className="flex items-center gap-2 font-bold tracking-tight">

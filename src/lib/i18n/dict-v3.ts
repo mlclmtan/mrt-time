@@ -82,6 +82,11 @@ export const v3En = {
   "error.description": "An unexpected error occurred. You can retry or head back to Home.",
   "error.retry": "Try again",
   "error.home": "Go to Home",
+
+  // Snapshot cache strings (t7)
+  "snap.updating": "Updating…",
+  "snap.updatedAgo": "Updated {time} ago",
+  "snap.offline": "Offline copy · {time} old",
 } as const;
 
 export const v3Zh: Record<keyof typeof v3En, string> = {
@@ -164,4 +169,9 @@ export const v3Zh: Record<keyof typeof v3En, string> = {
   "error.description": "發生非預期的錯誤。你可以重試或返回首頁。",
   "error.retry": "再試一次",
   "error.home": "回首頁",
+
+  // Snapshot cache strings (t7)
+  "snap.updating": "更新中…",
+  "snap.updatedAgo": "更新於 {time} 前",
+  "snap.offline": "離線快照 · {time} 前",
 };

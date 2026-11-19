@@ -21,9 +21,17 @@ export async function activeExperiments(now = Date.now()): Promise<ExperimentDef
   }
 }
 
+const assignmentCache = new Map<string, { at: number; assignments: Record<string, string> }>();
+
 /** Sticky assignments for this browser (bucket seed set by the proxy). */
-export async function experimentAssignments(): Promise<Record<string, string>> {
+export async function experimentAssignments(now = Date.now()): Promise<Record<string, string>> {
   const seed = (await headers()).get("x-mrt-bucket") || (await cookies()).get(BUCKET_COOKIE)?.value;
   if (!seed) return {};
-  return assignAll(seed, await activeExperiments());
+  const cached = assignmentCache.get(seed);
+  if (cached && now - cached.at < 60_000) {
+    return cached.assignments;
+  }
+  const assignments = assignAll(seed, await activeExperiments(now));
+  assignmentCache.set(seed, { at: now, assignments });
+  return assignments;
 }

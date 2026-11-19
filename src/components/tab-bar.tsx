@@ -1,6 +1,7 @@
 "use client";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { TrainFront, MapPin, CirclePlus, Route, User, Ellipsis, type LucideIcon } from "lucide-react";
 import { isActiveTab } from "./nav-tabs";
 import { splitLocale, type DictKey } from "@/lib/i18n";
@@ -55,20 +56,44 @@ export function getActiveTabIndex(
 }
 
 export function TabBar({ role }: { role?: Role | string | null }) {
+  let router: ReturnType<typeof useRouter> | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    router = useRouter();
+  } catch {
+    router = null;
+  }
   const pathname = usePathname() || "/";
   const { t, href } = useI18n();
   const { track } = useAnalytics();
   const tabs = getTabBarTabs(role, t);
-  const activeIndex = getActiveTabIndex(tabs, pathname);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  const [, startTransition] = useTransition();
+
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setPendingHref(null);
+  }
+
+  useEffect(() => {
+    if (!router) return;
+    tabs.forEach((tab) => {
+      router.prefetch(href(tab.href));
+    });
+  }, [router, tabs, href]);
+
+  const activeIndex = getActiveTabIndex(tabs, pendingHref ?? pathname);
   const currentTab = activeIndex >= 0 ? tabs[activeIndex]?.key : "other";
 
   return (
     <nav
       aria-label="Navigation"
-      className="site-tab-bar fixed bottom-0 left-0 right-0 z-40 mx-auto w-full max-w-5xl border-t border-line bg-panel"
+      data-active-index={activeIndex}
+      className="site-tab-bar shrink-0 z-40 mx-auto w-full max-w-5xl border-t border-line bg-panel"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="relative flex h-14 w-full items-stretch">
+      <div className="relative flex h-[52px] w-full items-stretch">
         {activeIndex >= 0 && (
           <div
             aria-hidden="true"
@@ -78,7 +103,7 @@ export function TabBar({ role }: { role?: Role | string | null }) {
               transform: `translateX(${activeIndex * 100}%)`,
             }}
           >
-            <div className="flex h-full w-full flex-col items-center justify-start pt-1.5">
+            <div className="flex h-full w-full flex-col items-center justify-start pt-1">
               <div className="h-7 w-12 rounded-full bg-led shadow-sm" />
             </div>
           </div>
@@ -86,18 +111,37 @@ export function TabBar({ role }: { role?: Role | string | null }) {
         {tabs.map((tab, idx) => {
           const isActive = idx === activeIndex;
           const Icon = tab.icon;
+          const targetUrl = href(tab.href);
           return (
             <Link
               key={tab.key}
-              href={href(tab.href)}
+              href={targetUrl}
+              prefetch={true}
               aria-current={isActive ? "page" : undefined}
-              onClick={() => {
+              onPointerDown={() => {
+                setPendingHref(tab.href);
+                router?.prefetch(targetUrl);
+              }}
+              onClick={(e) => {
+                if (isActive) {
+                  e.preventDefault();
+                  const main = document.querySelector("main") || document.getElementById("main-scroll");
+                  const prefersReduced =
+                    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                  main?.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" });
+                  return;
+                }
                 if (currentTab !== tab.key) {
                   track("tab_nav", { from: currentTab, to: tab.key });
                   addBreadcrumb(`tab:${tab.key}`);
                 }
+                e.preventDefault();
+                setPendingHref(tab.href);
+                startTransition(() => {
+                  router?.push(targetUrl);
+                });
               }}
-              className="relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-start pt-1.5 pb-1 text-center"
+              className="relative z-10 flex h-[52px] min-h-[48px] flex-1 flex-col items-center justify-start pt-1 pb-1 text-center"
             >
               <div className="flex h-7 w-12 items-center justify-center">
                 <Icon

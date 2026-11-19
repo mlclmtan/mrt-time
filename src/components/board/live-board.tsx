@@ -13,6 +13,7 @@ import type { LineCode } from "@/lib/network/data";
 import { recordStationUse } from "@/lib/stations/usage";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
+import { getSnapshot, saveSnapshot, ageLabel } from "@/lib/snapshot-cache";
 import { DirectionTimes } from "./direction-times";
 import { QuickEntry } from "./quick-entry";
 import { SeenToday } from "./seen-today";
@@ -24,12 +25,17 @@ const POLL_MS = 30_000;
 const RESUME_AFTER_MS = 60_000;
 
 export function LiveBoard({ slug, initial }: { slug: string; initial: Payload }) {
-  const { t } = useI18n();
-  const [data, setData] = useState<Payload>(initial);
+  const { t, locale } = useI18n();
+  const [data, setData] = useState<Payload>(() =>
+    initial.board ? initial : (getSnapshot<Payload>(`board:${slug}`)?.data ?? initial),
+  );
   const [offlineAt, setOfflineAt] = useState<number | null>(null);
+  const [snapshotSavedAt, setSnapshotSavedAt] = useState<number | null>(() =>
+    initial.board ? Date.now() : (getSnapshot<Payload>(`board:${slug}`)?.savedAt ?? null),
+  );
+  const [revalidating, setRevalidating] = useState(false);
   const [now, setNow] = useState(() => initial.board?.now ?? 0);
   const [mine, setMine] = useState<Observation[]>([]);
-  const key = `mrt_board_${slug}`;
   const loadRef = useRef<() => Promise<void>>(async () => {});
   const { track } = useAnalytics();
   const trackRef = useRef(track);
@@ -43,9 +49,16 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
   }, [slug]);
 
   useEffect(() => {
+    if (initial.board) {
+      saveSnapshot(`board:${slug}`, initial);
+    }
+  }, [slug, initial]);
+
+  useEffect(() => {
     let stopped = false;
     let hiddenAt: number | null = null;
     const load = async () => {
+      setRevalidating(true);
       try {
         const res = await fetch(`/api/board?station=${encodeURIComponent(slug)}`, { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
@@ -53,16 +66,18 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
         if (stopped) return;
         setData(body);
         setOfflineAt(null);
-        localStorage.setItem(key, JSON.stringify({ at: Date.now(), body }));
+        saveSnapshot(`board:${slug}`, body);
+        setSnapshotSavedAt(Date.now());
       } catch {
         // Offline: render the last snapshot we saved.
-        try {
-          const saved = JSON.parse(localStorage.getItem(key) || "null") as { at: number; body: Payload } | null;
-          if (saved && !stopped) {
-            setData(saved.body);
-            setOfflineAt(saved.at);
-          }
-        } catch {}
+        const snap = getSnapshot<Payload>(`board:${slug}`);
+        if (snap && !stopped) {
+          setData(snap.data);
+          setOfflineAt(snap.savedAt);
+          setSnapshotSavedAt(snap.savedAt);
+        }
+      } finally {
+        if (!stopped) setRevalidating(false);
       }
     };
     loadRef.current = load;
@@ -91,7 +106,7 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
       clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [slug, key]);
+  }, [slug]);
 
   // Saved: show exact times at once (own reading), then re-fetch for everyone's view.
   const onSaved = useCallback(() => {
@@ -118,7 +133,17 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
 
   return (
     <section aria-label={t("board.title")} className="space-y-4">
-      {offlineAt && (
+      {revalidating && (
+        <p className="text-xs font-medium text-muted animate-pulse">
+          {t("snap.updating")}
+        </p>
+      )}
+      {!revalidating && snapshotSavedAt && ageLabel(snapshotSavedAt, now, locale) && (
+        <p role="status" className="rounded-lg bg-warn/15 px-3 py-2 text-sm text-warn">
+          {ageLabel(snapshotSavedAt, now, locale)}
+        </p>
+      )}
+      {offlineAt && !snapshotSavedAt && (
         <p role="status" className="rounded-lg bg-warn/15 px-3 py-2 text-sm text-warn">
           {t("board.offline", { time: clock(offlineAt) })}
         </p>
@@ -128,7 +153,10 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
         <PlatformCard key={p.code} platform={p} now={now || board.now} crowd={data.crowd?.[p.code]} mine={mine} onSaved={onSaved} />
       ))}
       <div className="flex items-center gap-3 text-xs text-muted">
-        <p>{t("board.updated", { time: clock(board.now) })}</p>
+        <p>
+          {t("board.updated", { time: clock(board.now) })}
+          {revalidating ? ` · ${t("snap.updating")}` : ""}
+        </p>
         <button
           type="button"
           onClick={() => void refresh()}

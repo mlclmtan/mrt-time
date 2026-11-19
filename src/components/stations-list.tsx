@@ -24,6 +24,7 @@ import {
   USAGE_CHANGE_EVENT,
   type StationUsageState,
 } from "@/lib/stations/usage";
+import { getSnapshot, saveSnapshot, ageLabel } from "@/lib/snapshot-cache";
 
 function StationRow({
   s,
@@ -106,8 +107,20 @@ export function StationsList() {
   const [usage, setUsage] = useState<StationUsageState>(loadUsage);
   const [tab, setTab] = useState<StationTab>(() => defaultStationTab(loadUsage()));
   const userInteractedTab = useRef(false);
-  const [pinnedArrivals, setPinnedArrivals] = useState<Record<string, string>>({});
+  const [pinnedArrivals, setPinnedArrivals] = useState<Record<string, string>>(
+    () => getSnapshot<Record<string, string>>("stations")?.data ?? {},
+  );
+  const [snapshotSavedAt, setSnapshotSavedAt] = useState<number | null>(
+    () => getSnapshot<Record<string, string>>("stations")?.savedAt ?? null,
+  );
+  const [isRevalidating, setIsRevalidating] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const geo = useNearestStation();
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Sync usage on change events
   useEffect(() => {
@@ -160,6 +173,7 @@ export function StationsList() {
     let cancelled = false;
 
     const fetchBoard = async (slug: string) => {
+      setIsRevalidating(true);
       try {
         const res = await fetch(`/api/board?station=${encodeURIComponent(slug)}`, { cache: "no-store" });
         if (!res.ok) throw new Error("fetch error");
@@ -174,17 +188,29 @@ export function StationsList() {
           .filter((a): a is { inMin: number } => typeof a?.inMin === "number" && a.inMin >= 0);
 
         if (!arrivals.length) {
-          setPinnedArrivals((prev) => ({ ...prev, [slug]: "—" }));
+          setPinnedArrivals((prev) => {
+            const next = { ...prev, [slug]: "—" };
+            saveSnapshot("stations", next);
+            setSnapshotSavedAt(Date.now());
+            return next;
+          });
           return;
         }
 
         const next = arrivals.sort((a, b) => a.inMin - b.inMin)[0];
         const text = next.inMin === 0 ? t("board.due") : t("board.in", { n: next.inMin });
-        setPinnedArrivals((prev) => ({ ...prev, [slug]: text }));
+        setPinnedArrivals((prev) => {
+          const updated = { ...prev, [slug]: text };
+          saveSnapshot("stations", updated);
+          setSnapshotSavedAt(Date.now());
+          return updated;
+        });
       } catch {
         if (!cancelled) {
           setPinnedArrivals((prev) => ({ ...prev, [slug]: "—" }));
         }
+      } finally {
+        if (!cancelled) setIsRevalidating(false);
       }
     };
 
@@ -308,9 +334,23 @@ export function StationsList() {
           <div className="space-y-4">
             {pinnedStations.length > 0 && (
               <section className="space-y-2" aria-label={t("stations.section.pinned")}>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  {t("stations.section.pinned")}
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    {t("stations.section.pinned")}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    {isRevalidating && (
+                      <span className="text-xs font-medium text-muted animate-pulse">
+                        {t("snap.updating")}
+                      </span>
+                    )}
+                    {!isRevalidating && snapshotSavedAt && ageLabel(snapshotSavedAt, now, locale) && (
+                      <span className="text-xs font-medium text-muted">
+                        {ageLabel(snapshotSavedAt, now, locale)}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {pinnedStations.map((s) => (
                     <li key={`pinned-${s.slug}`}>

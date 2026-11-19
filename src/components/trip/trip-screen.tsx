@@ -24,6 +24,7 @@ import { localePath } from "@/lib/i18n";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { addBreadcrumb } from "@/lib/analytics/health";
 import { useI18n } from "../i18n";
+import { getSnapshot, saveSnapshot, ageLabel } from "@/lib/snapshot-cache";
 import { QuickEntry } from "../board/quick-entry";
 import { useTapQueue } from "../boarding/tap-queue";
 import {
@@ -94,11 +95,23 @@ export function TripScreen({
   const manual = useRef<JourneyChoice | null>(initialChoice);
   const [logged, setLogged] = useState<Logged[]>(today);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [view, setView] = useState<CommuteView | null>(initialView);
+  const [view, setView] = useState<CommuteView | null>(
+    () => initialView ?? (getSnapshot<CommuteView>(`trip:${key}`)?.data ?? null),
+  );
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => initialView?.generatedAt ?? Date.now());
   const [refresh, setRefresh] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(initialDismissedAt);
+  const [isRevalidating, setIsRevalidating] = useState(false);
+  const [snapshotSavedAt, setSnapshotSavedAt] = useState<number | null>(() =>
+    initialView ? Date.now() : (getSnapshot<CommuteView>(`trip:${key}`)?.savedAt ?? null),
+  );
+
+  useEffect(() => {
+    if (initialView) {
+      saveSnapshot(`trip:${key}`, initialView);
+    }
+  }, [key, initialView]);
 
   // Sheets
   const [screenSaysOpen, setScreenSaysOpen] = useState(false);
@@ -154,6 +167,7 @@ export function TripScreen({
     const load = async () => {
       const q = new URLSearchParams({ journey: key, fromLeg, state });
       if (tapStart) q.set("startAt", String(tapStart));
+      setIsRevalidating(true);
       try {
         const res = await fetch(`/api/commute?${q}`, { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
@@ -161,8 +175,12 @@ export function TripScreen({
         if (stopped) return;
         setView(body);
         setStaleAt(null);
+        saveSnapshot(`trip:${key}`, body);
+        setSnapshotSavedAt(Date.now());
       } catch {
         if (!stopped) setStaleAt(Date.now());
+      } finally {
+        if (!stopped) setIsRevalidating(false);
       }
     };
 
@@ -513,6 +531,16 @@ export function TripScreen({
             {t("trip.title")}
           </span>
           <div className="flex items-center gap-2">
+            {isRevalidating && (
+              <span className="text-xs font-medium text-muted animate-pulse">
+                {t("snap.updating")}
+              </span>
+            )}
+            {!isRevalidating && snapshotSavedAt && ageLabel(snapshotSavedAt, now, locale) && (
+              <span className="chip bg-warn/15 text-warn text-[11px] px-2 py-0.5">
+                {ageLabel(snapshotSavedAt, now, locale)}
+              </span>
+            )}
             {staleAt && (
               <span className="chip bg-warn/15 text-warn text-[11px] px-2 py-0.5">
                 {t("trip.now.offline", { time: clock(staleAt) })}
@@ -939,7 +967,7 @@ export function TripScreen({
       {toast && (
         <div
           role="status"
-          className="fixed bottom-[calc(60px+env(safe-area-inset-bottom))] inset-x-4 max-w-lg mx-auto z-50 rounded-2xl bg-panel border border-line shadow-2xl p-3 space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-200"
+          className="fixed bottom-16 inset-x-4 max-w-lg mx-auto z-50 rounded-2xl bg-panel border border-line shadow-2xl p-3 space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-200"
         >
           <div className="flex items-center justify-between gap-3">
             <span className={`text-sm font-bold ${toast.queued ? "text-warn" : "text-foreground"}`}>

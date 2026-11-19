@@ -40,7 +40,7 @@ export function ConsentBanner() {
       ref={sheet}
       role="dialog"
       aria-labelledby="consent-title"
-      className="rise fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-50 border-t border-line bg-panel/95 px-4 pt-3 pb-3 shadow-2xl backdrop-blur"
+      className="rise shrink-0 z-50 border-t border-line bg-panel/95 px-4 pt-3 pb-3 shadow-2xl backdrop-blur"
     >
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2">
         <p className="min-w-0 flex-[1_1_16rem] text-xs leading-snug text-muted">

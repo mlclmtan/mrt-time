@@ -76,7 +76,13 @@ export async function getSession(): Promise<{ user: SessionUser } | null> {
   if (devBypassAllowed() && !authConfigured()) return { user: DEV_USER };
   if (!authConfigured()) return null;
   try {
-    const session = await getAuth().api.getSession({ headers: await headers() });
+    const reqHeaders = await headers();
+    const cookieHeader = reqHeaders.get("cookie") || "";
+    // Short-circuit on cookie absence: never touch DB or Better Auth if no session cookie
+    if (!cookieHeader.includes("better-auth.session")) {
+      return null;
+    }
+    const session = await getAuth().api.getSession({ headers: reqHeaders });
     const role = roleFor(session?.user.email);
     return session && role
       ? { user: { id: session.user.id, email: session.user.email, name: session.user.name, role } }

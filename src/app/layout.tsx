@@ -9,7 +9,7 @@ import { I18nProvider } from "@/components/i18n";
 import { AnalyticsProvider } from "@/components/analytics/analytics-provider";
 import { ConsentBanner } from "@/components/analytics/consent-banner";
 import { PwaRegistration } from "@/components/pwa-registration";
-import { SiteHeader, SiteFooter } from "@/components/shell";
+import { SiteHeader, SiteFooter, AppMain } from "@/components/shell";
 import { TabBar } from "@/components/tab-bar";
 import { FeedbackWidget } from "@/components/voc/feedback-widget";
 import { NpsPrompt } from "@/components/voc/nps-prompt";
@@ -50,16 +50,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <I18nProvider locale={locale}>
           <AnalyticsProvider locale={locale} userType={userType} experiments={experiments}>
             <PwaRegistration />
-            <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4">
+            <div className="relative mx-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden">
               <SiteHeader />
-              <main className="flex-1 pb-[calc(72px+env(safe-area-inset-bottom))]">{children}</main>
-              <SiteFooter />
+              <AppMain>
+                <div className="flex-1">{children}</div>
+                <SiteFooter />
+              </AppMain>
+              <ConsentBanner />
+              <TabBar role={session?.user.role ?? null} />
             </div>
-            <TabBar role={session?.user.role ?? null} />
             <InstallPrompt />
             <FeedbackWidget />
             <NpsPrompt />
-            <ConsentBanner />
           </AnalyticsProvider>
         </I18nProvider>
       </body>
