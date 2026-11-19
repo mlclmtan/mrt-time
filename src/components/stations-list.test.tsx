@@ -39,14 +39,14 @@ describe("StationsList component", () => {
     expect(matches!.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("defaults to 'By line' tab with collapsed details when there is no usage history", () => {
+  it("defaults to 'Frequent' tab with 'All stations' heading when there is no usage history", () => {
     const html = renderStationsList();
-    // By line segment has aria-selected="true"
-    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>By line<\/button>/);
-    // Frequent segment is NOT selected
-    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="false"[^>]*>Frequent<\/button>/);
-    // <details> tags do not have open attribute
-    expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+    // Frequent segment has aria-selected="true"
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>Frequent<\/button>/);
+    // By line segment is NOT selected
+    expect(html).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="false"[^>]*>By line<\/button>/);
+    // Uppercase heading with count >= 12px
+    expect(html).toMatch(/<h2[^>]*class="[^"]*text-xs[^"]*uppercase[^"]*"[^>]*>All stations \(\d+\)<\/h2>/);
   });
 
   it("renders empty state for My stations when no usage yet", () => {

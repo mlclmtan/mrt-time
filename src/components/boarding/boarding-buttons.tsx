@@ -140,10 +140,12 @@ export function BoardingButtons({
           <button
             type="button"
             onClick={onScreenSays}
+            aria-label={t("trip.action.screenSays")}
             className="btn btn-secondary min-h-[44px] h-11 py-1 px-2 text-xs sm:text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5"
           >
             <Sparkles size={15} aria-hidden className="shrink-0" />
-            <span className="truncate">{t("trip.action.screenSays")}</span>
+            <span className="hidden sm:inline truncate">{t("trip.action.screenSays")}</span>
+            <span className="sm:hidden whitespace-nowrap">{t("boarding.screenShort")}</span>
           </button>
         )}
       </div>

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { STATIONS } from "@/lib/network";
 import {
+  buildStationSections,
   defaultStationTab,
   getInitialUsage,
   hasStationUsage,
   isPinned,
   loadUsage,
+  orderStationPlatforms,
   rankFrequent,
   recent,
   recordStationUse,
@@ -205,21 +208,21 @@ describe("Station usage logic", () => {
   });
 
   describe("hasStationUsage & defaultStationTab", () => {
-    it("returns false and defaults to 'line' when there is no usage history", () => {
+    it("returns false for hasStationUsage and defaultStationTab defaults to 'frequent'", () => {
       expect(hasStationUsage(null)).toBe(false);
       expect(hasStationUsage(undefined)).toBe(false);
       expect(hasStationUsage(getInitialUsage())).toBe(false);
       expect(hasStationUsage({ stations: {}, pins: [] })).toBe(false);
-      expect(defaultStationTab(getInitialUsage())).toBe("line");
+      expect(defaultStationTab(getInitialUsage())).toBe("frequent");
     });
 
-    it("returns false and defaults to 'line' when station records have zero count", () => {
+    it("returns false for hasStationUsage when station records have zero count", () => {
       const emptyUsage: StationUsageState = {
         pins: [],
         stations: { "outram-park": { count: 0, lastUsed: 0 } },
       };
       expect(hasStationUsage(emptyUsage)).toBe(false);
-      expect(defaultStationTab(emptyUsage)).toBe("line");
+      expect(defaultStationTab(emptyUsage)).toBe("frequent");
     });
 
     it("returns true and defaults to 'frequent' when stations are pinned", () => {
@@ -236,6 +239,259 @@ describe("Station usage logic", () => {
       state = recordUse(state, "tiong-bahru", NOW, "view");
       expect(hasStationUsage(state)).toBe(true);
       expect(defaultStationTab(state)).toBe("frequent");
+    });
+  });
+
+  describe("buildStationSections pure function", () => {
+    const pins = ["outram-park", "tiong-bahru"];
+    const recent = ["tiong-bahru", "shenton-way", "harbourfront"]; // Note: tiong-bahru overlaps with pins
+
+    it("in Frequent mode: pinned, recent (excluding pinned), and all (excluding pinned and recent)", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins,
+        recent,
+        mode: "frequent",
+      });
+
+      expect(sections.map((s) => s.id)).toEqual(["pinned", "recent", "all"]);
+
+      const pinnedSlugs = sections[0].stations.map((s) => s.slug);
+      const recentSlugs = sections[1].stations.map((s) => s.slug);
+      const allSlugs = sections[2].stations.map((s) => s.slug);
+
+      // Pinned contains outram-park and tiong-bahru
+      expect(pinnedSlugs).toEqual(["outram-park", "tiong-bahru"]);
+
+      // Recent excludes tiong-bahru because it is already pinned
+      expect(recentSlugs).toEqual(["shenton-way", "harbourfront"]);
+      expect(recentSlugs).not.toContain("tiong-bahru");
+
+      // All stations excludes any station from pinned or recent
+      expect(allSlugs).not.toContain("outram-park");
+      expect(allSlugs).not.toContain("tiong-bahru");
+      expect(allSlugs).not.toContain("shenton-way");
+      expect(allSlugs).not.toContain("harbourfront");
+
+      // Verify NO station id occurs twice across all sections
+      const totalSlugs = [...pinnedSlugs, ...recentSlugs, ...allSlugs];
+      expect(new Set(totalSlugs).size).toBe(totalSlugs.length);
+      expect(totalSlugs.length).toBe(STATIONS.length);
+    });
+
+    it("in Frequent mode with no pins and no recent: only 'all' section is returned", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins: [],
+        recent: [],
+        mode: "frequent",
+      });
+
+      expect(sections).toHaveLength(1);
+      expect(sections[0].id).toBe("all");
+      expect(sections[0].stations.length).toBe(STATIONS.length);
+
+      const allSlugs = sections[0].stations.map((s) => s.slug);
+      expect(new Set(allSlugs).size).toBe(allSlugs.length);
+    });
+
+    it("in A–Z mode: one flat list with no extra Pinned/Recent sections", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins,
+        recent,
+        mode: "az",
+      });
+
+      expect(sections).toHaveLength(1);
+      expect(sections[0].id).toBe("all");
+      expect(sections[0].stations.length).toBe(STATIONS.length);
+
+      const allSlugs = sections[0].stations.map((s) => s.slug);
+      expect(new Set(allSlugs).size).toBe(allSlugs.length);
+    });
+
+    it("in Near me mode: one flat list with no extra Pinned/Recent sections", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins,
+        recent,
+        mode: "near",
+        nearOrder: ["shenton-way", "outram-park"],
+      });
+
+      expect(sections).toHaveLength(1);
+      expect(sections[0].id).toBe("all");
+      expect(sections[0].stations.length).toBe(STATIONS.length);
+
+      const allSlugs = sections[0].stations.map((s) => s.slug);
+      expect(new Set(allSlugs).size).toBe(allSlugs.length);
+      expect(allSlugs[0]).toBe("shenton-way");
+      expect(allSlugs[1]).toBe("outram-park");
+    });
+
+    it("in By line mode: one flat list, each station appears AT MOST ONCE", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins,
+        recent,
+        mode: "line",
+      });
+
+      expect(sections).toHaveLength(1);
+      expect(sections[0].id).toBe("all");
+      expect(sections[0].stations.length).toBe(STATIONS.length);
+
+      const allSlugs = sections[0].stations.map((s) => s.slug);
+      // Crucial test: Interchange stations like Outram Park (EW16/NE3/TE17) appear EXACTLY ONCE
+      expect(allSlugs.filter((s) => s === "outram-park")).toHaveLength(1);
+      expect(allSlugs.filter((s) => s === "dhoby-ghaut")).toHaveLength(1);
+      expect(allSlugs.filter((s) => s === "marina-bay")).toHaveLength(1);
+      expect(new Set(allSlugs).size).toBe(allSlugs.length);
+    });
+
+    it("in Search mode: one flat list, each station once", () => {
+      const sections = buildStationSections({
+        stations: STATIONS,
+        pins,
+        recent,
+        query: "outram",
+      });
+
+      expect(sections).toHaveLength(1);
+      expect(sections[0].id).toBe("search");
+      expect(sections[0].stations).toHaveLength(1);
+      expect(sections[0].stations[0].slug).toBe("outram-park");
+    });
+
+    it("guarantees no station occurs twice across any permutations of mode, pins, recent, query", () => {
+      const testModes = ["frequent", "near", "az", "line"] as const;
+      const testPins = [[], ["outram-park"], ["outram-park", "tiong-bahru"]];
+      const testRecent = [[], ["outram-park"], ["tiong-bahru", "shenton-way"]];
+      const testQueries = ["", "park", "nonexistentstation"];
+
+      for (const mode of testModes) {
+        for (const p of testPins) {
+          for (const r of testRecent) {
+            for (const q of testQueries) {
+              const result = buildStationSections({
+                stations: STATIONS,
+                pins: p,
+                recent: r,
+                mode,
+                query: q,
+              });
+
+              const allIds = result.flatMap((s) => s.stations.map((st) => st.slug));
+              expect(new Set(allIds).size).toBe(allIds.length);
+            }
+          }
+        }
+      }
+    });
+  });
+
+  describe("orderStationPlatforms pure function", () => {
+    const mockPlatforms = [
+      {
+        code: "EW16",
+        line: "EW",
+        directions: [
+          { key: "TO_WEST", terminal: "Tuas Link" },
+          { key: "TO_EAST", terminal: "Pasir Ris" },
+          { key: "TO_WEST", terminal: "Tuas Link" }, // Duplicate to test deduplication
+        ],
+      },
+      {
+        code: "NE3",
+        line: "NE",
+        directions: [
+          { key: "TO_NORTH", terminal: "Punggol" },
+          { key: "TO_SOUTH", terminal: "HarbourFront" },
+        ],
+      },
+      {
+        code: "TE17",
+        line: "TE",
+        directions: [
+          { key: "TO_NORTH", terminal: "Woodlands North" },
+          { key: "TO_SOUTH", terminal: "Bayshore" },
+        ],
+      },
+    ];
+
+    it("deduplicates directions so every line/direction shows once", () => {
+      const ordered = orderStationPlatforms(mockPlatforms, "outram-park");
+      const ew = ordered.find((p) => p.line === "EW");
+      expect(ew?.directions).toHaveLength(2);
+      expect(ew?.directions.map((d) => d.key)).toEqual(
+        expect.arrayContaining(["TO_EAST", "TO_WEST"])
+      );
+    });
+
+    it("for Outram Park in morning (09:00 SGT): EWL (towards Pasir Ris) and TEL (towards Bayshore) are first, NEL is last", () => {
+      // 09:00 SGT = 01:00 UTC
+      const morningTime = new Date("2026-11-19T01:00:00Z").getTime();
+      const ordered = orderStationPlatforms(mockPlatforms, "outram-park", morningTime);
+
+      // NEL is collapsed/last
+      expect(ordered[2].line).toBe("NE");
+      expect(ordered[0].line).toBe("EW");
+      expect(ordered[1].line).toBe("TE");
+
+      // Commute directions are first on EWL and TEL
+      expect(ordered[0].directions[0].terminal).toBe("Pasir Ris");
+      expect(ordered[1].directions[0].terminal).toBe("Bayshore");
+    });
+
+    it("for Outram Park in evening (18:00 SGT): TEL (towards Woodlands North) and EWL (towards Tuas Link) are first, NEL is last", () => {
+      // 18:00 SGT = 10:00 UTC
+      const eveningTime = new Date("2026-11-19T10:00:00Z").getTime();
+      const ordered = orderStationPlatforms(mockPlatforms, "outram-park", eveningTime);
+
+      // NEL is collapsed/last
+      expect(ordered[2].line).toBe("NE");
+      expect(ordered[0].line).toBe("TE");
+      expect(ordered[1].line).toBe("EW");
+
+      // Commute directions are first on TEL and EWL
+      expect(ordered[0].directions[0].terminal).toBe("Woodlands North");
+      expect(ordered[1].directions[0].terminal).toBe("Tuas Link");
+    });
+
+    it("for Tiong Bahru: Pasir Ris first in morning, Tuas Link first in evening", () => {
+      const tbPlatform = [
+        {
+          code: "EW17",
+          line: "EW",
+          directions: [
+            { key: "TO_WEST", terminal: "Tuas Link" },
+            { key: "TO_EAST", terminal: "Pasir Ris" },
+          ],
+        },
+      ];
+
+      const morning = orderStationPlatforms(tbPlatform, "tiong-bahru", new Date("2026-11-19T01:00:00Z").getTime());
+      expect(morning[0].directions[0].terminal).toBe("Pasir Ris");
+
+      const evening = orderStationPlatforms(tbPlatform, "tiong-bahru", new Date("2026-11-19T10:00:00Z").getTime());
+      expect(evening[0].directions[0].terminal).toBe("Tuas Link");
+    });
+
+    it("for Shenton Way: Woodlands North first in evening", () => {
+      const swPlatform = [
+        {
+          code: "TE19",
+          line: "TE",
+          directions: [
+            { key: "TO_SOUTH", terminal: "Bayshore" },
+            { key: "TO_NORTH", terminal: "Woodlands North" },
+          ],
+        },
+      ];
+
+      const evening = orderStationPlatforms(swPlatform, "shenton-way", new Date("2026-11-19T10:00:00Z").getTime());
+      expect(evening[0].directions[0].terminal).toBe("Woodlands North");
     });
   });
 });

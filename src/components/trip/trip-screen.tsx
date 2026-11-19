@@ -15,7 +15,7 @@ import {
   type JourneyChoice,
   type TapKind,
 } from "@/lib/journey/commute";
-import { clock } from "@/lib/format";
+import { clock, formatCountdownMin } from "@/lib/format";
 import { LINES, getDirection, stationForCode, type LineCode } from "@/lib/network";
 import { MINUTE, nowMs } from "@/lib/time";
 import { randomId } from "@/lib/analytics/client";
@@ -828,24 +828,22 @@ export function TripScreen({
                 </div>
               )}
 
-              {/* NEXT Train LED Clock (≥ 48px) + Countdown (≥ 20px) */}
+              {/* NEXT Train: BIG "N min" (≥ 32px, bold, LED style) + small clock (≥ 15px) */}
               <div className="flex items-baseline justify-between py-1">
                 <div>
                   <span className="text-xs uppercase font-semibold text-muted tracking-wider block">
                     {t("trip.now.next")}
                   </span>
                   <span className="text-5xl font-black tabular led text-led leading-none">
-                    {nextArrival?.clock ?? "—"}
+                    {nextArrival
+                      ? formatCountdownMin(Math.max(0, nextArrival.at - now), locale)
+                      : "—"}
                   </span>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-xl font-bold tabular text-accent block">
-                    {nextArrival
-                      ? nextArrival.inMin <= 0
-                        ? t("trip.now.leaveNow")
-                        : `in ${nextArrival.inMin} min`
-                      : ""}
+                  <span className="text-[17px] font-semibold tabular text-muted block">
+                    {nextArrival?.clock ?? "—"}
                   </span>
                   {nextArrival?.plusMinus != null && (
                     <span className="text-xs text-muted tabular">
@@ -855,17 +853,22 @@ export function TripScreen({
                 </div>
               </div>
 
-              {/* Next 2 Times (≥ 24px) */}
-              <div className="flex items-center justify-between pt-1 border-t border-line">
+              {/* Next 2 Times (≥ 17px): "in 10 min · 15:33" */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-line">
                 <span className="text-xs uppercase font-semibold text-muted tracking-wider">
                   {t("trip.now.then")}
                 </span>
-                <div className="flex items-center gap-4 text-2xl font-bold tabular led text-muted">
-                  {thenArrivals.map((arr: BoardArrival, i: number) => (
-                    <span key={i} className="hover:text-foreground">
-                      {arr.clock}
-                    </span>
-                  ))}
+                <div className="flex items-center gap-3 text-[17px] font-semibold tabular led text-muted">
+                  {thenArrivals.slice(0, 2).map((arr: BoardArrival, i: number) => {
+                    const arrMs = Math.max(0, arr.at - now);
+                    const arrMin = Math.floor(arrMs / 60_000);
+                    const inText = arrMin === 0 ? t("board.due") : t("board.in", { n: arrMin });
+                    return (
+                      <span key={i} className="hover:text-foreground">
+                        {inText} · {arr.clock}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
 

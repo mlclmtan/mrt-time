@@ -106,3 +106,5 @@ export function getLineGroups(stationsList: Station[] = STATIONS): LineGroup[] {
     };
   });
 }
+
+export { buildStationSections, orderStationPlatforms } from "./usage";

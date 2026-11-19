@@ -82,7 +82,7 @@ describe("station board view-model", () => {
     const html = renderToStaticMarkup(createElement(DirectionTimes, { view, now }));
     expect(html).toContain(">10:24<");
     expect(html).toContain("≈10:29");
-    expect(html).toContain("in 1 min");
+    expect(html).toContain("1 min");
     expect(html).toContain("From the platform screen 3 min ago");
   });
 

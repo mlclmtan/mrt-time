@@ -2,20 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search, Star } from "lucide-react";
+import { Search, Star } from "lucide-react";
 import { LINES, PLATFORMS, STATIONS, type Station } from "@/lib/network";
 import { useAnalytics } from "./analytics/analytics-provider";
 import { useI18n } from "./i18n";
 import { useNearestStation } from "./geo/geo-suggest";
+import type { StationTab } from "@/lib/stations/list";
 import {
-  filterStations,
-  getLineGroups,
-  sortAlphabetical,
-  sortFrequent,
-  sortNearby,
-  type StationTab,
-} from "@/lib/stations/list";
-import {
+  buildStationSections,
   defaultStationTab,
   loadUsage,
   rankFrequent,
@@ -82,14 +76,20 @@ function StationRow({
           <span className="text-[13px] text-muted">{secondaryName}</span>
         </div>
 
-        {/* Inline next train for pinned rows */}
-        {inlineNextTrain && (
-          <span
-            className="ml-auto shrink-0 font-mono text-sm font-semibold tabular text-led"
-            aria-label={t("stations.nextTrain")}
-          >
-            {inlineNextTrain}
-          </span>
+        {/* Inline next train for pinned / recent rows */}
+        {inlineNextTrain !== undefined && (
+          <div className="ml-auto shrink-0 flex items-center justify-end min-w-[56px]">
+            {inlineNextTrain === "loading" ? (
+              <span className="inline-block h-4 w-10 rounded bg-panel-2 animate-pulse" aria-hidden />
+            ) : (
+              <span
+                className="font-mono text-sm font-semibold tabular text-led"
+                aria-label={t("stations.nextTrain")}
+              >
+                {inlineNextTrain}
+              </span>
+            )}
+          </div>
         )}
       </Link>
     </div>
@@ -98,7 +98,7 @@ function StationRow({
 
 /**
  * Stations list with sticky search, segmented sort controls, Pinned, Recent,
- * and collapsible line groups.
+ * and deduplicated station sections.
  */
 export function StationsList() {
   const { t, locale } = useI18n();
@@ -118,7 +118,7 @@ export function StationsList() {
   const geo = useNearestStation();
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 10_000);
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -155,20 +155,10 @@ export function StationsList() {
   const frequentSlugs = useMemo(() => rankFrequent(usage), [usage]);
   const recentSlugs = useMemo(() => recent(usage, 5, pinnedSlugs), [usage, pinnedSlugs]);
 
-  const stationMap = useMemo(() => new Map(STATIONS.map((s) => [s.slug, s])), []);
-  const pinnedStations = useMemo(
-    () => pinnedSlugs.map((slug) => stationMap.get(slug)!).filter(Boolean),
-    [pinnedSlugs, stationMap]
-  );
-  const recentStations = useMemo(
-    () => recentSlugs.map((slug) => stationMap.get(slug)!).filter(Boolean),
-    [recentSlugs, stationMap]
-  );
-
-  // Lazily fetch inline next train for pinned stations (max 3)
+  // Lazily fetch inline next train for Pinned (max 3) and Recent (max 5) stations
   useEffect(() => {
-    const pinnedToFetch = pinnedSlugs.slice(0, 3);
-    if (!pinnedToFetch.length) return;
+    const toFetch = [...new Set([...pinnedSlugs.slice(0, 3), ...recentSlugs.slice(0, 5)])];
+    if (!toFetch.length) return;
 
     let cancelled = false;
 
@@ -214,12 +204,12 @@ export function StationsList() {
       }
     };
 
-    pinnedToFetch.forEach((slug) => void fetchBoard(slug));
+    toFetch.forEach((slug) => void fetchBoard(slug));
 
     return () => {
       cancelled = true;
     };
-  }, [pinnedSlugs, t]);
+  }, [pinnedSlugs, recentSlugs, t]);
 
   // Near me analytics tracking
   const firstNear = geo.order?.[0];
@@ -231,22 +221,20 @@ export function StationsList() {
     }
   }, [tab, firstNear, track]);
 
-  // Main sorted list according to active tab
-  const sortedStations = useMemo(() => {
-    if (tab === "frequent") {
-      return sortFrequent(STATIONS, frequentSlugs, locale);
-    }
-    if (tab === "near") {
-      return sortNearby(STATIONS, geo.order, locale);
-    }
-    if (tab === "az") {
-      return sortAlphabetical(STATIONS, locale);
-    }
-    return STATIONS;
-  }, [tab, frequentSlugs, geo.order, locale]);
-
-  const lineGroups = useMemo(() => getLineGroups(), []);
-  const searchResults = useMemo(() => filterStations(STATIONS, query), [query]);
+  const sections = useMemo(
+    () =>
+      buildStationSections({
+        stations: STATIONS,
+        pins: pinnedSlugs,
+        recent: recentSlugs,
+        mode: tab,
+        query,
+        locale,
+        nearOrder: geo.order,
+        frequentSlugs,
+      }),
+    [pinnedSlugs, recentSlugs, tab, query, locale, geo.order, frequentSlugs],
+  );
 
   return (
     <div className="space-y-4">
@@ -267,18 +255,29 @@ export function StationsList() {
 
       {/* When searching, show search results directly */}
       {query.trim() ? (
-        <section aria-label={t("stations.title")} className="space-y-2">
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {searchResults.map((s) => (
-              <li key={s.slug}>
-                <StationRow
-                  s={s}
-                  isPinnedStation={pinnedSlugs.includes(s.slug)}
-                  onTogglePin={togglePinState}
-                />
-              </li>
-            ))}
-          </ul>
+        <section aria-label={t("stations.section.search")} className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
+              {t("stations.section.search")} ({sections[0]?.stations.length ?? 0})
+            </h2>
+          </div>
+          {sections[0]?.stations.length === 0 ? (
+            <div className="panel p-4 text-center text-sm text-muted">
+              {locale === "zh-Hant" ? "找不到符合的車站" : "No stations found"}
+            </div>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {sections[0]?.stations.map((s) => (
+                <li key={`search-${s.slug}`}>
+                  <StationRow
+                    s={s}
+                    isPinnedStation={pinnedSlugs.includes(s.slug)}
+                    onTogglePin={togglePinState}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : (
         <>
@@ -330,116 +329,56 @@ export function StationsList() {
             </p>
           )}
 
-          {/* Sections above the list: Pinned (max 3 with inline next train) and Recent (last 5) */}
+          {/* Empty hint when frequent tab has no pinned or recent stations */}
+          {tab === "frequent" && pinnedSlugs.length === 0 && recentSlugs.length === 0 && (
+            <div className="panel flex min-h-[56px] items-center justify-center p-4 text-center text-sm text-muted">
+              {t("stations.empty.myStations")}
+            </div>
+          )}
+
+          {/* Render sections: in Frequent -> Pinned (if any), Recent (if any), All stations */}
+          {/* in A-Z / Near me / By line -> All stations flat list */}
           <div className="space-y-4">
-            {pinnedStations.length > 0 && (
-              <section className="space-y-2" aria-label={t("stations.section.pinned")}>
+            {sections.map((section) => (
+              <section key={section.id} className="space-y-2" aria-label={t(section.titleKey)}>
                 <div className="flex items-center justify-between">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    {t("stations.section.pinned")}
+                    {t(section.titleKey)} ({section.stations.length})
                   </h2>
-                  <div className="flex items-center gap-2">
-                    {isRevalidating && (
-                      <span className="text-xs font-medium text-muted animate-pulse">
-                        {t("snap.updating")}
-                      </span>
-                    )}
-                    {!isRevalidating && snapshotSavedAt && ageLabel(snapshotSavedAt, now, locale) && (
-                      <span className="text-xs font-medium text-muted">
-                        {ageLabel(snapshotSavedAt, now, locale)}
-                      </span>
-                    )}
-                  </div>
+                  {section.id === "pinned" && (
+                    <div className="flex items-center gap-2">
+                      {isRevalidating && (
+                        <span className="text-xs font-medium text-muted animate-pulse">
+                          {t("snap.updating")}
+                        </span>
+                      )}
+                      {!isRevalidating && snapshotSavedAt && ageLabel(snapshotSavedAt, now, locale) && (
+                        <span className="text-xs font-medium text-muted">
+                          {ageLabel(snapshotSavedAt, now, locale)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <ul className="grid gap-2 sm:grid-cols-2">
-                  {pinnedStations.map((s) => (
-                    <li key={`pinned-${s.slug}`}>
-                      <StationRow
-                        s={s}
-                        isPinnedStation={true}
-                        onTogglePin={togglePinState}
-                        inlineNextTrain={pinnedArrivals[s.slug] ?? "—"}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {recentStations.length > 0 && (
-              <section className="space-y-2" aria-label={t("stations.section.recent")}>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  {t("stations.section.recent")}
-                </h2>
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {recentStations.map((s) => (
-                    <li key={`recent-${s.slug}`}>
+                  {section.stations.map((s) => (
+                    <li key={`${section.id}-${s.slug}`}>
                       <StationRow
                         s={s}
                         isPinnedStation={pinnedSlugs.includes(s.slug)}
                         onTogglePin={togglePinState}
+                        inlineNextTrain={
+                          section.id === "pinned" || section.id === "recent"
+                            ? (pinnedArrivals[s.slug] ?? (isRevalidating ? "loading" : "—"))
+                            : undefined
+                        }
                       />
                     </li>
                   ))}
                 </ul>
               </section>
-            )}
-
-            {/* Empty state for My stations when no pinned or recent stations */}
-            {pinnedStations.length === 0 && recentStations.length === 0 && (
-              <div className="panel flex min-h-[56px] items-center justify-center p-4 text-center text-sm text-muted">
-                {t("stations.empty.myStations")}
-              </div>
-            )}
+            ))}
           </div>
-
-          {/* Sorted list or By line groups */}
-          {tab === "line" ? (
-            <div className="space-y-2">
-              {lineGroups.map((group) => (
-                <details key={group.code} className="panel group overflow-hidden">
-                  <summary className="flex min-h-[56px] cursor-pointer items-center justify-between p-4 font-semibold select-none transition-colors hover:bg-panel-2/50">
-                    <span className="flex items-center gap-2.5">
-                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: group.color }} aria-hidden />
-                      <span className="text-[17px] font-semibold">{group.name[locale]}</span>
-                    </span>
-                    <ChevronDown
-                      size={18}
-                      className="text-muted transition-transform duration-200 group-open:rotate-180"
-                      aria-hidden
-                    />
-                  </summary>
-                  <div className="border-t border-line p-2">
-                    <ul className="grid gap-2 sm:grid-cols-2">
-                      {group.stations.map((s) => (
-                        <li key={`${group.code}-${s.slug}`}>
-                          <StationRow
-                            s={s}
-                            isPinnedStation={pinnedSlugs.includes(s.slug)}
-                            onTogglePin={togglePinState}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </details>
-              ))}
-            </div>
-          ) : (
-            <section aria-label={t("stations.title")} className="space-y-2">
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {sortedStations.map((s) => (
-                  <li key={s.slug}>
-                    <StationRow
-                      s={s}
-                      isPinnedStation={pinnedSlugs.includes(s.slug)}
-                      onTogglePin={togglePinState}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
         </>
       )}
     </div>

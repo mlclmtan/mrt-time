@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { DirectionView, BoardReason, EstimateBasis } from "@/lib/predict/board-view";
 import type { T } from "@/lib/i18n";
 import { stationForCode } from "@/lib/network";
-import { clock, dayText, plusMinusText } from "@/lib/format";
+import { clock, dayText, formatCountdownMin, plusMinusText } from "@/lib/format";
 import { useI18n } from "../i18n";
 
 /** "the platform screen at 10:21 on Mon 2 Nov" / "the typical gap (~6 min)" (after "estimated from"). */
@@ -44,11 +44,10 @@ export function boardReasonText(t: T, r: BoardReason, locale: "en" | "zh-Hant" =
 }
 
 /**
- * Compact direction block: destination + next three trains on one row as SGT
- * clock times with a live countdown. Exact times are solid; every estimate
- * reads "≈10:24 ±1 min" (each train its own ±, always with the unit) with an
- * "estimate" chip and the plain reason. Glanceable countdown "in N min" is ≥ 17px
- * and "then" times are ≥ 15px.
+ * Compact direction block: destination + next three trains on one row.
+ * "in N min" is the MAIN time (≥ 32px, bold, LED style), clock time is secondary (≥ 15px).
+ * The next two trains: "in 10 min · 15:33" at ≥ 17px.
+ * Estimate chip + source note collapsed into one line.
  */
 export function DirectionTimes({
   view,
@@ -63,11 +62,11 @@ export function DirectionTimes({
   if (view.state === "closed") return <p className="mt-2 text-muted">{t("board.notRunning")}</p>;
   const est = view.state === "estimate";
   const approx = (a: { plusMinus: number | null }) => (a.plusMinus != null ? "≈" : "");
-  const inText = (at: number) => {
-    const n = Math.max(0, Math.floor((at - now) / 60_000));
-    return n === 0 ? t("board.due") : t("board.in", { n });
-  };
+
   const [first, ...rest] = view.arrivals;
+  const firstRemainingMs = first ? Math.max(0, first.at - now) : 0;
+  const firstMainTime = first ? formatCountdownMin(firstRemainingMs, locale) : "";
+
   return (
     <div className="mt-0.5" data-board-state={view.state}>
       <div className="flex items-baseline justify-between gap-2 overflow-hidden flex-nowrap">
@@ -79,34 +78,46 @@ export function DirectionTimes({
         )}
         <div className="flex items-baseline gap-2.5 sm:gap-4 shrink-0">
           {first && (
-            <div className="flex items-baseline gap-1 shrink-0">
+            <div className="flex items-baseline gap-1.5 shrink-0">
               <span className="text-[11px] font-semibold tracking-wider text-muted uppercase shrink-0">{t("board.next")}</span>
-              <span className={`led tabular text-2xl font-bold leading-none ${est ? "opacity-80" : ""}`}>
-                {approx(first)}
-                {first.clock}
-                {first.plusMinus != null && <span className="ml-0.5 text-xs font-normal text-muted">{plusMinusText(t, first.plusMinus)}</span>}
+              {/* BIG "N min" (>= 32px, bold, LED style) */}
+              <span className={`led tabular text-[32px] sm:text-4xl font-bold leading-none ${est ? "opacity-80" : ""}`}>
+                {firstMainTime}
               </span>
-              <span className="tabular text-[17px] font-semibold text-foreground ml-0.5 shrink-0">{inText(first.at)}</span>
+              {/* small clock "15:27" beside or under it (>= 15px), +- uncertainty tiny */}
+              <span className="text-[15px] font-medium text-muted tabular shrink-0 ml-0.5">
+                {approx(first)}{first.clock}
+                {first.plusMinus != null && (
+                  <span className="ml-0.5 text-[11px] font-normal text-muted">{plusMinusText(t, first.plusMinus)}</span>
+                )}
+              </span>
             </div>
           )}
-          {rest.map((a) => (
-            <div key={a.at} className="flex items-baseline gap-1 shrink-0">
-              <span className="text-[11px] tracking-wider text-muted uppercase shrink-0 hidden sm:inline">{t("board.then")}</span>
-              <span className={`led tabular text-[17px] leading-none text-muted ${a.plusMinus != null ? "opacity-70" : "opacity-90"}`}>
-                {approx(a)}
-                {a.clock}
-                {a.plusMinus != null && <span className="ml-0.5 text-xs font-normal text-muted">{plusMinusText(t, a.plusMinus)}</span>}
-              </span>
-              <span className="tabular text-[15px] text-muted hidden sm:inline">{inText(a.at)}</span>
-            </div>
-          ))}
+          {rest.slice(0, 2).map((a) => {
+            const restMs = Math.max(0, a.at - now);
+            const restMin = Math.floor(restMs / 60_000);
+            const inStr = restMin === 0 ? t("board.due") : t("board.in", { n: restMin });
+            return (
+              <div key={a.at} className="flex items-baseline gap-1 shrink-0 hidden sm:flex">
+                <span className="text-[11px] tracking-wider text-muted uppercase shrink-0">{t("board.then")}</span>
+                {/* The next two trains: "in 10 min · 15:33" at >= 17px */}
+                <span className={`tabular text-[17px] font-semibold text-muted ${a.plusMinus != null ? "opacity-75" : "opacity-90"}`}>
+                  {inStr} · {approx(a)}{a.clock}
+                  {a.plusMinus != null && (
+                    <span className="ml-0.5 text-[11px] font-normal text-muted">{plusMinusText(t, a.plusMinus)}</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-        <span className={`chip py-0 px-1.5 text-[11px] font-semibold ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
+      {/* Estimate chip + source note collapsed into one line */}
+      <div className="mt-1 flex items-center gap-1.5 text-xs overflow-hidden">
+        <span className={`shrink-0 chip py-0 px-1.5 text-[11px] font-semibold ${est ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
           {t(est ? "board.estimate" : "board.exact")}
         </span>
-        <span className="text-muted text-xs truncate max-w-full">{boardReasonText(t, view.reason, locale)}</span>
+        <span className="text-muted text-xs truncate min-w-0">{boardReasonText(t, view.reason, locale)}</span>
       </div>
     </div>
   );

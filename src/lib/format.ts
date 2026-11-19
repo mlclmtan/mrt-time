@@ -48,6 +48,30 @@ export function minsUntil(at: number, now: number) {
 }
 
 /**
+ * Shared pure countdown formatter:
+ * 0–59 s (0 to 59_999 ms) -> "Now" (zh: "現在")
+ * 60–119 s (60_000 to 119_999 ms) -> "1 min" (zh: "1 分鐘")
+ * rounds DOWN to whole minutes
+ * >= 60 min -> "1 h 5 min" (zh: "1 小時 5 分鐘")
+ * 60 min exactly -> "1 h" (zh: "1 小時")
+ */
+export function formatCountdownMin(ms: number, locale: "en" | "zh-Hant" = "en"): string {
+  if (ms < 60_000) {
+    return locale === "zh-Hant" ? "現在" : "Now";
+  }
+  const totalMins = Math.floor(ms / 60_000);
+  if (totalMins >= 60) {
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (mins === 0) {
+      return locale === "zh-Hant" ? `${hours} 小時` : `${hours} h`;
+    }
+    return locale === "zh-Hant" ? `${hours} 小時 ${mins} 分鐘` : `${hours} h ${mins} min`;
+  }
+  return locale === "zh-Hant" ? `${totalMins} 分鐘` : `${totalMins} min`;
+}
+
+/**
  * Unambiguous date range for "YYYY-MM-DD" SGT dates (no MM/DD confusion):
  * en → "7 Oct – 3 Nov 2026", zh-Hant → "2026年10月7日至11月3日".
  */

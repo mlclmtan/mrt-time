@@ -72,10 +72,24 @@ export const v3En = {
   "stations.tab.byLine": "By line",
   "stations.section.pinned": "Pinned",
   "stations.section.recent": "Recent",
+  "stations.section.all": "All stations",
+  "stations.section.search": "Search results",
   "stations.empty.myStations": "Stations you open show up here",
   "stations.action.pin": "Pin station",
   "stations.action.unpin": "Unpin station",
   "stations.nextTrain": "Next train",
+
+  // Station page (t8)
+  "station.subtitle": "Next trains towards each terminal · tap Boarded when you get on",
+  "station.line.tapToExpand": "{line} · tap to expand",
+  "station.line.tapToCollapse": "{line} · tap to collapse",
+  "boarding.screenShort": "Screen",
+
+  // Countdown & time units (t8)
+  "time.now": "Now",
+  "time.min": "{n} min",
+  "time.hourMin": "{h} h {m} min",
+  "time.hour": "{h} h",
 
   // Error boundary strings
   "error.title": "Something went wrong",
@@ -159,10 +173,24 @@ export const v3Zh: Record<keyof typeof v3En, string> = {
   "stations.tab.byLine": "按路線",
   "stations.section.pinned": "已釘選",
   "stations.section.recent": "最近造訪",
+  "stations.section.all": "所有車站",
+  "stations.section.search": "搜尋結果",
   "stations.empty.myStations": "你打開過的車站會顯示在這裡",
   "stations.action.pin": "釘選車站",
   "stations.action.unpin": "取消釘選車站",
   "stations.nextTrain": "下一班車",
+
+  // Station page (t8)
+  "station.subtitle": "往各終點站的下一班車 · 上車時點擊「我上車了」",
+  "station.line.tapToExpand": "{line} · 點擊展開",
+  "station.line.tapToCollapse": "{line} · 點擊收起",
+  "boarding.screenShort": "螢幕",
+
+  // Countdown & time units (t8)
+  "time.now": "現在",
+  "time.min": "{n} 分鐘",
+  "time.hourMin": "{h} 小時 {m} 分鐘",
+  "time.hour": "{h} 小時",
 
   // Error boundary strings
   "error.title": "出了點問題",

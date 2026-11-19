@@ -108,4 +108,54 @@ describe("LiveBoard (problem 2 & 7: compact station page & glanceable sizes)", (
     expect(html).toContain("Estimate");
     expect(html).toContain("chip");
   });
+
+  it("renders 'in N min' as MAIN time (>= 32px, bold, LED) and clock time as secondary (>= 15px)", () => {
+    const html = renderToStaticMarkup(
+      <LiveBoard slug="outram-park" initial={{ board, alerts: null, crowd: null }} />
+    );
+    // Main countdown LED style >= 32px
+    expect(html).toMatch(/text-\[32px\][^"]*font-bold[^"]*leading-none/);
+    expect(html).toContain("2 min");
+    // Clock time secondary >= 15px
+    expect(html).toMatch(/text-\[15px\][^"]*tabular/);
+    expect(html).toContain("10:22");
+    // Next train "in 7 min · ≈10:27" >= 17px
+    expect(html).toMatch(/text-\[17px\][^"]*font-semibold[^"]*text-muted/);
+    expect(html).toContain("in 7 min · ≈10:27");
+  });
+
+  it("collapses NE (third) line card at Outram Park by default behind 'tap to expand' button", () => {
+    const outramBoard: Board = {
+      ...board,
+      platforms: [
+        ...board.platforms,
+        {
+          code: "NE3",
+          line: "NEL" as never,
+          lineName: { en: "North East Line", "zh-Hant": "東北線" },
+          color: "#9900aa",
+          inService: true,
+          directions: [
+            {
+              key: "TO_NORTH",
+              label: { en: "towards Punggol", "zh-Hant": "往榜鵝" },
+              board: { en: "Punggol", "zh-Hant": "榜鵝" },
+              terminal: "NE17",
+              prediction: board.platforms[0].directions[0].prediction,
+              seenToday: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <LiveBoard slug="outram-park" initial={{ board: outramBoard, alerts: null, crowd: null }} />
+    );
+
+    // NE platform card is collapsed behind header row
+    expect(html).toContain("North East Line · tap to expand");
+    // Directions under NE platform are not rendered when collapsed
+    expect(html).not.toContain("Punggol");
+  });
 });

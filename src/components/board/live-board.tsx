@@ -1,6 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RefreshCw, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, RefreshCw, Users } from "lucide-react";
 import type { Board, BoardDirection, BoardPlatform } from "@/lib/server/board";
 import type { CrowdLevel, LineAlerts } from "@/lib/server/lta";
 import type { Observation } from "@/lib/predict/types";
@@ -10,7 +10,7 @@ import { BUS_APP_URL } from "@/lib/push/disruptions";
 import { clock } from "@/lib/format";
 import { nowMs } from "@/lib/time";
 import type { LineCode } from "@/lib/network/data";
-import { recordStationUse } from "@/lib/stations/usage";
+import { orderStationPlatforms, recordStationUse } from "@/lib/stations/usage";
 import { useAnalytics } from "../analytics/analytics-provider";
 import { useI18n } from "../i18n";
 import { getSnapshot, saveSnapshot, ageLabel } from "@/lib/snapshot-cache";
@@ -127,12 +127,16 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
   }, [track]);
 
   const board = data.board;
+  const orderedPlatforms = useMemo(() => {
+    return orderStationPlatforms(board?.platforms ?? [], slug, now || board?.now);
+  }, [board?.platforms, slug, now, board?.now]);
+
   if (!board) return <p className="text-muted">{t("board.loading")}</p>;
-  const lines = board.platforms.map((p) => p.line);
+  const lines = orderedPlatforms.map((p) => p.line);
   const alerts = data.alerts?.segments.filter((s) => lines.includes(s.line as BoardPlatform["line"])) ?? [];
 
   return (
-    <section aria-label={t("board.title")} className="space-y-4">
+    <section aria-label={t("board.title")} className="space-y-3">
       {revalidating && (
         <p className="text-xs font-medium text-muted animate-pulse">
           {t("snap.updating")}
@@ -149,8 +153,16 @@ export function LiveBoard({ slug, initial }: { slug: string; initial: Payload })
         </p>
       )}
       {alerts.length > 0 && data.alerts && <AlertBanner alerts={data.alerts} lines={[...new Set(alerts.map((a) => a.line))]} />}
-      {board.platforms.map((p) => (
-        <PlatformCard key={p.code} platform={p} now={now || board.now} crowd={data.crowd?.[p.code]} mine={mine} onSaved={onSaved} />
+      {orderedPlatforms.map((p) => (
+        <PlatformCard
+          key={p.code}
+          platform={p}
+          now={now || board.now}
+          crowd={data.crowd?.[p.code]}
+          mine={mine}
+          onSaved={onSaved}
+          defaultCollapsed={slug === "outram-park" && p.line === "NEL"}
+        />
       ))}
       <div className="flex items-center gap-3 text-xs text-muted">
         <p>
@@ -202,15 +214,18 @@ function PlatformCard({
   crowd,
   mine,
   onSaved,
+  defaultCollapsed = false,
 }: {
   platform: BoardPlatform;
   now: number;
   crowd?: CrowdLevel;
   mine: Observation[];
   onSaved: () => void;
+  defaultCollapsed?: boolean;
 }) {
   const { t, locale } = useI18n();
   const { track } = useAnalytics();
+  const [expanded, setExpanded] = useState(!defaultCollapsed);
   const sent = useRef(false);
   useEffect(() => {
     if (crowd && !sent.current) {
@@ -218,17 +233,50 @@ function PlatformCard({
       track("crowd_view", { station: platform.code, line: platform.line, level: crowd });
     }
   }, [crowd, platform.code, platform.line, track]);
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="panel flex min-h-[44px] w-full items-center justify-between px-4 py-2.5 text-left font-semibold transition-colors hover:bg-panel-2/50 active:scale-95"
+      >
+        <span className="flex items-center gap-2">
+          <span className="chip text-white text-xs font-semibold" style={{ background: platform.color }}>
+            {platform.code}
+          </span>
+          <span className="text-sm font-semibold">
+            {t("station.line.tapToExpand", { line: platform.lineName[locale] })}
+          </span>
+        </span>
+        <ChevronDown size={18} className="text-muted" aria-hidden />
+      </button>
+    );
+  }
+
   return (
     <article className="panel overflow-hidden">
-      <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-        <span className="chip text-white" style={{ background: platform.color }}>
-          {platform.code}
-        </span>
-        <span className="text-sm font-semibold">{platform.lineName[locale]}</span>
-        {crowd && crowd !== "NA" && (
-          <span className={`chip ml-auto ${crowd === "h" ? "bg-bad/15 text-bad" : crowd === "m" ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
-            <Users size={12} aria-hidden /> {t(`crowd.${crowd}`)}
+      <header className="flex items-center justify-between border-b border-line px-4 py-2">
+        <div className="flex items-center gap-2">
+          <span className="chip text-white" style={{ background: platform.color }}>
+            {platform.code}
           </span>
+          <span className="text-sm font-semibold">{platform.lineName[locale]}</span>
+          {crowd && crowd !== "NA" && (
+            <span className={`chip ml-2 ${crowd === "h" ? "bg-bad/15 text-bad" : crowd === "m" ? "bg-warn/15 text-warn" : "bg-go/15 text-go"}`}>
+              <Users size={12} aria-hidden /> {t(`crowd.${crowd}`)}
+            </span>
+          )}
+        </div>
+        {defaultCollapsed && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xs text-muted hover:text-foreground active:scale-95"
+            aria-label={t("station.line.tapToCollapse", { line: platform.lineName[locale] })}
+          >
+            <ChevronUp size={18} aria-hidden />
+          </button>
         )}
       </header>
       <div className="divide-y divide-line">
@@ -268,7 +316,7 @@ function DirectionRow({
 
   const destination = (direction.board ?? direction.label)[locale];
   return (
-    <div className="px-3.5 py-2.5 sm:px-4 sm:py-3" data-direction-row={`${platform.code}:${direction.key}`}>
+    <div className="px-3.5 py-2 sm:px-4 sm:py-2.5" data-direction-row={`${platform.code}:${direction.key}`}>
       <DirectionTimes view={view} now={now} destination={destination} />
       {view.state === "exact" && (
         <div className="mt-1.5 flex flex-wrap gap-2 text-xs">

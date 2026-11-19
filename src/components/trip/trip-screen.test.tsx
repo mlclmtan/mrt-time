@@ -72,12 +72,14 @@ describe("TripScreen (/trip)", () => {
 
   it("renders large LED styles and required font sizes on the Now card", () => {
     const html = renderTrip(at("08:30"), []);
-    // Large LED clock (≥ 48px)
+    // Main countdown LED (≥ 32px, bold, LED style)
     expect(html).toContain("text-5xl font-black tabular led text-led");
-    // Countdown (≥ 20px)
-    expect(html).toContain("text-xl font-bold tabular");
-    // Next 2 times (≥ 24px)
-    expect(html).toContain("text-2xl font-bold tabular led");
+    // Clock time is secondary (≥ 15px)
+    expect(html).toContain("text-[17px] font-semibold tabular text-muted");
+    // Next 2 times: "in 10 min · 15:33" (≥ 17px)
+    expect(html).toContain("text-[17px] font-semibold tabular led text-muted");
+    expect(html).toContain("in 5 min · 08:35");
+    expect(html).toContain("in 10 min · 08:40");
     // Door tip (≥ 17px)
     expect(html).toContain("text-[17px] font-medium leading-snug text-led");
     expect(html).toContain("Door 3");
