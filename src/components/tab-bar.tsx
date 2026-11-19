@@ -83,6 +83,8 @@ export function TabBar({ role }: { role?: Role | string | null }) {
     });
   }, [router, tabs, href]);
 
+  // Visual highlight follows the tap at once (optimistic); the REAL route decides whether a tap navigates.
+  const routeIndex = getActiveTabIndex(tabs, pathname);
   const activeIndex = getActiveTabIndex(tabs, pendingHref ?? pathname);
   const currentTab = activeIndex >= 0 ? tabs[activeIndex]?.key : "other";
 
@@ -123,7 +125,7 @@ export function TabBar({ role }: { role?: Role | string | null }) {
                 router?.prefetch(targetUrl);
               }}
               onClick={(e) => {
-                if (isActive) {
+                if (idx === routeIndex) {
                   e.preventDefault();
                   const main = document.querySelector("main") || document.getElementById("main-scroll");
                   const prefersReduced =
